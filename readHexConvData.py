@@ -65,6 +65,7 @@ if __name__ == "__main__":
     gain_type = "lg"
     chan = 0
 
+    print("Reading file")
     for line in fin.readlines():#[:1000]:
 
         if "Event" in line:
@@ -110,9 +111,9 @@ if __name__ == "__main__":
             #print("Reading chan %i in %s" %(chan,gain_type) )
 
             if gain_type == "hg":
-                for i in range(nsca): hgain_b[i*64 + chan] = int(items[i])
+                for i in range(nsca): hgain_b[(12-i)*64 + chan] = int(items[i])
             elif gain_type == "lg":
-                for i in range(nsca): lgain_b[i*64 + chan] = int(items[i])
+                for i in range(nsca): lgain_b[(12-i)*64 + chan] = int(items[i])
 
             # switch counters
             if chan == 63:
@@ -124,6 +125,7 @@ if __name__ == "__main__":
 
     # fill last event
     tree.Fill()
+    print("Tree filled")
 
     tree.Write()
     tree.Print()
