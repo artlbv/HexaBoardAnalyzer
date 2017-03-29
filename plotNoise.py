@@ -42,6 +42,47 @@ def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
 
     return data
 
+########################
+def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
+
+    #data = { chan: {var:[] for var in variabs }} for chan in chans}
+    data = { chan: { var:[] for var in variabs } for chan in chans}
+
+    for ientry, entry in enumerate(tree):
+        # skip first event
+        if tree.event == 0: continue
+        #if tree.event < 50: continue
+        #if tree.event > 100: continue
+        if tree.event > 8000: break
+
+        # check chip
+        if tree.chip != chip: continue
+
+        # check sca is not in roll mode!
+        if tree.roll[sca] == 1: continue
+
+        #if ientry % 1000 == 0: print(ientry)
+        for var in variabs:
+
+            # TOT/TOA have no sca!
+            if ("tot" in var) or ("toa" in var): isca = 0
+            else: isca = sca
+
+            for chan in chans:
+                val = getattr(tree,var)[isca*64 + chan]
+                if val == 0: val = 4096
+                elif val == 4: val = 0
+
+                data[chan][var].append(val)
+
+    # Convert lists to numpy arrays
+    #for key,arr in data.items(): data[key] = np.array(data[key])
+    for chan in data:
+        for var in variabs:
+            data[chan][var] = np.array(data[chan][var])
+
+    return data
+
 def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
     # read data
     tfile = rt.TFile(fname)
@@ -73,9 +114,16 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
     print("Starting event loop")
     # read in all channels' data
     all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
+
+    print("Reading chan data")
+    chans_data = getChansData(tree,chip,chans,sca,variabs)
+
+    #oexit(0)
+    print("Analyzing chan data")
     for chan in chans:
-        print("Reading chan %i" %chan)
-        chan_data = getChanData(tree,chip,chan,sca,variabs)
+        #print("Reading chan %i" %chan)
+        #chan_data = getChanData(tree,chip,chan,sca,variabs)
+        chan_data = chans_data[chan]
 
         # Pedestal subtraction
         for var,values in chan_data.items():
@@ -144,22 +192,32 @@ def plotNoise(noise_data, cname):
     # make histograms
     hists = []
     #for key,values in noise_data.items():
-    for key in sorted(noise_data):
-        values = noise_data[key]
-        print key, values.mean(),values.std()
 
-        xmin = math.floor(values.min())-0.5
-        xmax = math.ceil(values.max())+0.5
-        #nbins = int((xmax-xmin))
-        nbins = 100
+    h_order = ["_DS","_AS"]#,"_IN","_CN"]#,"_CNF"]
+    variabs = ["lg","hg"]
 
-        hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
-        for val in values: hist.Fill(val)
-        #hist.Draw()
-        hists.append(hist)
+    #for key in sorted(data):
+    #for key in sorted(noise_data):
+    for var in variabs:
+        for htype in h_order:
+            key = var + htype
+
+            values = noise_data[key]
+            print key, values.mean(),values.std()
+
+            xmin = math.floor(values.min())-0.5
+            xmax = math.ceil(values.max())+0.5
+            #nbins = int((xmax-xmin))
+            nbins = min(100,len(values)/50)
+
+            hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
+            for val in values: hist.Fill(val)
+            #hist.Draw()
+            hists.append(hist)
 
     canv = rt.TCanvas("canv_noise","canv",1400,800)
-    canv.Divide(4,len(hists)/4,0.01,0.01)
+    #canv.Divide(4,len(hists)/4,0.01,0.01)
+    canv.Divide(len(h_order),len(hists)/len(h_order),0.01,0.01)
     for i, hist in enumerate(hists):
         canv.cd(i+1)
         hist.Draw()
