@@ -14,6 +14,9 @@ def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
     for ientry, entry in enumerate(tree):
         # skip first event
         if tree.event == 0: continue
+        #if tree.event < 50: continue
+        #if tree.event > 100: continue
+        if tree.event > 8000: break
 
         # check chip
         if tree.chip != chip: continue
@@ -39,7 +42,7 @@ def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
 
     return data
 
-def readTree(fname, chip = 0, sca = 0, nchans = 64, skip_chan = 0):
+def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
     # read data
     tfile = rt.TFile(fname)
     tree = tfile.Get("sk2cms")
@@ -55,10 +58,22 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, skip_chan = 0):
     #variabs = ["charge_lowGain","charge_hiGain"]
     variabs = ["lg","hg"]
 
+    # create channel list
+    if chan_select == "all":
+        chans = range(nchans)
+    elif chan_select == "even":
+        chans = range(0,nchans,2)
+    elif chan_select == "odd":
+        chans = range(1,nchans,2)
+    else:
+        chans = range(nchans)
+    print("Going to analyze these channels:")
+    print(chans)
+
     print("Starting event loop")
     # read in all channels' data
-    all_chan_data = { chan:{var:[] for var in variabs} for chan in range(nchans)}
-    for chan in range(nchans):
+    all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
+    for chan in chans:
         print("Reading chan %i" %chan)
         chan_data = getChanData(tree,chip,chan,sca,variabs)
 
@@ -78,7 +93,8 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, skip_chan = 0):
 def calcNoise(all_chan_data):
 
     noise_data = {}
-    variabs = all_chan_data[0].keys()
+    chans = all_chan_data.keys()
+    variabs = all_chan_data[chans[0]].keys()
 
     for var in variabs:
         noise_data[var + "_IN"] = []
@@ -88,23 +104,23 @@ def calcNoise(all_chan_data):
 
     for var in variabs:
         # Loop over events (based on 0 channel)
-        for event in range(len(all_chan_data[0][var])):
+        for event in range(len(all_chan_data[chans[0]][var])):
 
             sumAS = 0
             sumDS = 0
 
-            for chan in range(nchans):
+            for i,chan in enumerate(chans):
 
                 val = all_chan_data[chan][var][event]
                 # direct sum
                 sumDS += val
                 # alternate sum
-                if chan%2 == 0: sumAS += val
+                if i % 2 == 0: sumAS += val
                 else: sumAS -= val
 
             # calc noise
-            inc_noise = sumAS / math.sqrt(nchans)
-            coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / nchans
+            inc_noise = sumAS / math.sqrt(len(chans))
+            coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / len(chans)
 
             if abs(sumAS) > 500:
                 print("Suspiciously large AS: %i in event %i" %(sumAS,event))
@@ -134,7 +150,8 @@ def plotNoise(noise_data, cname):
 
         xmin = math.floor(values.min())-0.5
         xmax = math.ceil(values.max())+0.5
-        nbins = int((xmax-xmin))
+        #nbins = int((xmax-xmin))
+        nbins = 100
 
         hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
         for val in values: hist.Fill(val)
@@ -142,7 +159,6 @@ def plotNoise(noise_data, cname):
         hists.append(hist)
 
     canv = rt.TCanvas("canv_noise","canv",1400,800)
-    #canv.DivideSquare(len(hists),0.01,0.01)
     canv.Divide(4,len(hists)/4,0.01,0.01)
     for i, hist in enumerate(hists):
         canv.cd(i+1)
@@ -174,14 +190,15 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 0
+    sca = 4
     nchans = 64
+    chan_select = "even"
 
     for chip in range(4):
         print(80*"#")
         print("Analyzing: chip %i, sca %i" %(chip,sca))
 
-        all_data = readTree(fname, chip, sca, nchans)
-        cname = run_dir + "noise_chip_%i_sca_%i" %(chip,sca)
+        all_data = readTree(fname, chip, sca, nchans, chan_select)
+        cname = run_dir + "noise_chip_%i_sca_%i_chans_%s" %(chip,sca,chan_select)
         noise_data = calcNoise(all_data)
         plotNoise(noise_data, cname)
