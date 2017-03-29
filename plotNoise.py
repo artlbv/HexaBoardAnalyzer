@@ -13,7 +13,7 @@ def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
 
     for ientry, entry in enumerate(tree):
         # skip first event
-        if tree.event == 1: continue
+        if tree.event == 0: continue
 
         # check chip
         if tree.chip != chip: continue
@@ -39,16 +39,12 @@ def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
 
     return data
 
-
-if __name__ == "__main__":
-
-    fnames = glob.glob("sk2cms_tree.root")
-
+def readTree(fname, chip = 0, sca = 0, nchans = 64, skip_chan = 0):
     # read data
-    #tfile = rt.TFile(fname)
-    #tree = tfile.Get("sk2cms")
-    tree = rt.TChain("sk2cms")
-    for fname in fnames: tree.Add(fname)
+    tfile = rt.TFile(fname)
+    tree = tfile.Get("sk2cms")
+    #tree = rt.TChain("sk2cms")
+    #for fname in fnames: tree.Add(fname)
 
     if not tree:
         print("No tree found!")
@@ -59,10 +55,6 @@ if __name__ == "__main__":
     #variabs = ["charge_lowGain","charge_hiGain"]
     variabs = ["lg","hg"]
 
-    sca = 2
-    chip = 1
-    nchans = 64
-
     print("Starting event loop")
     # read in all channels' data
     all_chan_data = { chan:{var:[] for var in variabs} for chan in range(nchans)}
@@ -70,21 +62,32 @@ if __name__ == "__main__":
         print("Reading chan %i" %chan)
         chan_data = getChanData(tree,chip,chan,sca,variabs)
 
+        # Pedestal subtraction
         for var,values in chan_data.items():
             chan_ped = values.mean()
-            print chan, chan_ped
+            #print chan, chan_ped
 
             # subtract pedestal from values
             all_chan_data[chan][var] = np.subtract(values,chan_ped)
 
-    data = {}
-    for var in variabs:
-        data[var + "_IN"] = []
-        data[var + "_CN"] = []
-        data[var + "_DS"] = []
-        data[var + "_AS"] = []
+    print("Finished event loop")
+    tfile.Close()
+
+    return all_chan_data
+
+def calcNoise(all_chan_data):
+
+    noise_data = {}
+    variabs = all_chan_data[0].keys()
 
     for var in variabs:
+        noise_data[var + "_IN"] = []
+        noise_data[var + "_CN"] = []
+        noise_data[var + "_DS"] = []
+        noise_data[var + "_AS"] = []
+
+    for var in variabs:
+        # Loop over events (based on 0 channel)
         for event in range(len(all_chan_data[0][var])):
 
             sumAS = 0
@@ -103,50 +106,82 @@ if __name__ == "__main__":
             inc_noise = sumAS / math.sqrt(nchans)
             coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / nchans
 
-            data[var + "_AS" ].append(sumAS)
-            data[var + "_DS" ].append(sumDS)
-            data[var + "_IN" ].append(inc_noise)
-            data[var + "_CN" ].append(coh_noise)
+            if abs(sumAS) > 500:
+                print("Suspiciously large AS: %i in event %i" %(sumAS,event))
+                continue
+            if abs(sumDS) > 500:
+                print("Suspiciously large DS: %i in event %i" %(sumDS,event))
+                continue
 
-    print("Finished event loop")
+            noise_data[var + "_AS" ].append(sumAS)
+            noise_data[var + "_DS" ].append(sumDS)
+            noise_data[var + "_IN" ].append(inc_noise)
+            noise_data[var + "_CN" ].append(coh_noise)
+
     # Convert lists to numpy arrays
-    for key,arr in data.items(): data[key] = np.array(data[key])
+    for key,arr in noise_data.items(): noise_data[key] = np.array(noise_data[key])
 
-    #print(data)
+    return noise_data
+
+def plotNoise(noise_data, cname):
+
     # make histograms
     hists = []
-    #for key,values in data.items():
-    for key in sorted(data):
-        values = data[key]
+    #for key,values in noise_data.items():
+    for key in sorted(noise_data):
+        values = noise_data[key]
         print key, values.mean(),values.std()
 
-        nbins = len(values)/10
-        xmin = values.min()
-        xmax = values.max()
+        xmin = math.floor(values.min())-0.5
+        xmax = math.ceil(values.max())+0.5
+        nbins = int((xmax-xmin))
 
         hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
         for val in values: hist.Fill(val)
         #hist.Draw()
         hists.append(hist)
 
-    canv = rt.TCanvas("canv_noise","canv",1000,800)
+    canv = rt.TCanvas("canv_noise","canv",1400,800)
     #canv.DivideSquare(len(hists),0.01,0.01)
-    canv.Divide(4,len(hists)/4)
+    canv.Divide(4,len(hists)/4,0.01,0.01)
     for i, hist in enumerate(hists):
         canv.cd(i+1)
         hist.Draw()
 
     canv.Draw()
+    canv.Update()
 
-    q = raw_input("Continue?")
+    #q = raw_input("Continue?")
+    canv.SaveAs(cname+".pdf")
 
-    #tfile.Close()
+if __name__ == "__main__":
 
-    '''
-    histIN = rt.TH1F("h_IN_"+ var, "Incoherent noise of " + var, 100, -400,400)
-    histCN = rt.TH1F("h_CN_"+ var, "Coherent noise of " + var, 100, -400,400)
-    hists.append(histCN)
-    hists.append(histIN)
-    dhists["h_IN_"+ var] = histIN
-    dhists["h_CN_"+ var] = histCN
-    '''
+    if len(sys.argv) > 1:
+        fname = sys.argv[1]
+        print '# Input files are', fname
+    else:
+        print "No input files given!"
+        #exit(0)
+
+        fname = "sk2cms_tree.root"
+
+        print("Using " + fname)
+
+    #fnames = glob.glob(fname)
+    run_name = fname.replace('.root','')
+    run_dir = run_name + '_plots/'
+    if not os.path.exists(run_dir): os.makedirs(run_dir)
+    print("Output dir: " + run_dir)
+
+    #chip = 0
+    sca = 0
+    nchans = 64
+
+    for chip in range(4):
+        print(80*"#")
+        print("Analyzing: chip %i, sca %i" %(chip,sca))
+
+        all_data = readTree(fname, chip, sca, nchans)
+        cname = run_dir + "noise_chip_%i_sca_%i" %(chip,sca)
+        noise_data = calcNoise(all_data)
+        plotNoise(noise_data, cname)

@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-import csv
+import sys,csv
 import numpy as np
 from array import array
 
@@ -32,10 +32,24 @@ def load_mapping(fname = "fromDocDB/Skiroc2CMS_sensor_map_simplified.csv"):
 
 if __name__ == "__main__":
 
-    fname = "/Users/artur/Dropbox/Work/LLR/HGCAL/SK2cms/hexaboard/fromDocDB/RUN_170317_0912.txt"
-    fin = open(fname,"read")
 
-    fout = rt.TFile( 'sk2cms_tree.root', 'recreate' )
+    if len(sys.argv) > 1:
+        fname = sys.argv[1]
+        print '# Input files are', fname
+    else:
+        print "No input files given!"
+        #exit(0)
+
+        #fname = "/Users/artur/Dropbox/Work/LLR/HGCAL/SK2cms/hexaboard/fromDocDB/RUN_170317_0912.txt"
+        fname = "/Users/artur/Downloads/Hexaboard_data/RUN_290317_1109.txt"
+
+        print("Using " + fname)
+
+    fin = open(fname,"read")
+    foutname = fname.replace('.txt','.root')
+    print("Storing data in " + foutname)
+
+    fout = rt.TFile( foutname, 'recreate' )
     tree = rt.TTree( 'sk2cms', 'sk2cms tree' )
 
     # variables for tree
@@ -102,18 +116,24 @@ if __name__ == "__main__":
         else:
             # check line contains data (x nsca)
             items = line.split()
-            if len(items) != nsca: continue
+            #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
+            if (len(items) < nsca): continue
             # check there was an event header before
             if event == -99:
-                print("No event header before data line!"); continue
+                print("No event header before data line!");
+                continue
 
             # read data
             #print("Reading chan %i in %s" %(chan,gain_type) )
 
+            for i,item in enumerate(items):
+                if item == 0: items[i] == 4096
+                elif item == 4: items[i] == 0
+
             if gain_type == "hg":
-                for i in range(nsca): hgain_b[(12-i)*64 + chan] = int(items[i])
+                for i in range(nsca): hgain_b[i*64 + chan] = int(items[12-i])
             elif gain_type == "lg":
-                for i in range(nsca): lgain_b[(12-i)*64 + chan] = int(items[i])
+                for i in range(nsca): lgain_b[i*64 + chan] = int(items[12-i])
 
             # switch counters
             if chan == 63:
