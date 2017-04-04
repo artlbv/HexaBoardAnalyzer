@@ -7,42 +7,6 @@ import ROOT as rt
 #rt.TGaxis.SetMaxDigits(3)
 
 ########################
-def getChanData(tree, chip = 0, chan = 0, sca = 0, variabs = []):
-
-    data = { var:[] for var in variabs }
-
-    for ientry, entry in enumerate(tree):
-        # skip first event
-        if tree.event == 0: continue
-        #if tree.event < 50: continue
-        #if tree.event > 100: continue
-        if tree.event > 8000: break
-
-        # check chip
-        if tree.chip != chip: continue
-
-        # check sca is not in roll mode!
-        if tree.roll[sca] == 1: continue
-
-        #if ientry % 1000 == 0: print(ientry)
-        for var in variabs:
-
-            # TOT/TOA have no sca!
-            if ("tot" in var) or ("toa" in var): isca = 0
-            else: isca = sca
-
-            val = getattr(tree,var)[isca*64 + chan]
-            if val == 0: val = 4096
-            elif val == 4: val = 0
-
-            data[var].append(val)
-
-    # Convert lists to numpy arrays
-    for key,arr in data.items(): data[key] = np.array(data[key])
-
-    return data
-
-########################
 def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
 
     #data = { chan: {var:[] for var in variabs }} for chan in chans}
@@ -50,13 +14,16 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
 
     for ientry, entry in enumerate(tree):
         # skip first event
-        if tree.event == 0: continue
+        if tree.event < 1: continue
         #if tree.event < 50: continue
         #if tree.event > 100: continue
         if tree.event > 8000: break
 
+        if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
+
         # check chip
-        if tree.chip != chip: continue
+        if chip != "all":
+            if tree.chip != chip: continue
 
         # check sca is not in roll mode!
         if tree.roll[sca] == 1: continue
@@ -68,12 +35,21 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
             if ("tot" in var) or ("toa" in var): isca = 0
             else: isca = sca
 
-            for chan in chans:
-                val = getattr(tree,var)[isca*64 + chan]
-                if val == 0: val = 4096
-                elif val == 4: val = 0
+            if chip == "all":
+                for chan in chans[:len(chans)/4]:#range(64):
+                    val = getattr(tree,var)[isca*64 + chan % 64 ]
+                    if val == 0: val = 4096
+                    elif val == 4: val = 0
 
-                data[chan][var].append(val)
+                    data[chan+tree.chip*64][var].append(val)
+            else:
+                #for chan in chans:
+                for chan in chans:
+                    val = getattr(tree,var)[isca*64 + chan % 64 ]
+                    if val == 0: val = 4096
+                    elif val == 4: val = 0
+
+                    data[chan][var].append(val)
 
     # Convert lists to numpy arrays
     #for key,arr in data.items(): data[key] = np.array(data[key])
@@ -99,6 +75,7 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
     #variabs = ["charge_lowGain","charge_hiGain"]
     variabs = ["lg","hg"]
 
+    if chip == "all": nchans *= 4
     # create channel list
     if chan_select == "all":
         chans = range(nchans)
@@ -129,7 +106,7 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
         for var,values in chan_data.items():
             chan_ped = values.mean()
             chan_ped_std = values.std()
-            if chan_ped_std > 3.0:
+            if chan_ped_std < -3.0:
                 print(80*"!")
                 print chan, chan_ped, chan_ped_std
                 # put channel to zero
@@ -185,10 +162,10 @@ def calcNoise(all_chan_data):
             inc_noise = sumAS / math.sqrt(n_valid_chans)
             coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / n_valid_chans
 
-            if abs(sumAS) > 500:
+            if abs(sumAS) > 1500:
                 print("Suspiciously large AS: %i in event %i" %(sumAS,event))
                 continue
-            if abs(sumDS) > 500:
+            if abs(sumDS) > 1500:
                 print("Suspiciously large DS: %i in event %i" %(sumDS,event))
                 continue
 
@@ -255,23 +232,25 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
 
     chans = all_chan_data.keys()#[:3]
     variabs = all_chan_data[chans[0]].keys()
+    nchans = chans[-1]
 
     hists = {}
     for var in variabs:
-        hist = rt.TH2F("h_corr_"+var,"correlation for "+var,64,0,64,64,0,64)
+        #hist = rt.TH2F("h_corr_"+var,"correlation for "+var,64,0,64,64,0,64)
+        hist = rt.TH2F("h_corr_"+var,"correlation for "+var,nchans,0,nchans,nchans,0,nchans)
         hists["h_corr_"+var] = hist
 
-    for chan1 in chans:
-        for chan2 in chans:
+    # compute correlations and fill histos
+    for var in variabs:
+        data_matrix = np.array([all_chan_data[chan][var] for chan in chans])
+        corr_matr = np.corrcoef(data_matrix)
 
-            for var in variabs:
-                if chan1 == chan2:
-                    corr = 0
-                else:
-                    corr_matr = np.corrcoef(all_chan_data[chan1][var],all_chan_data[chan2][var])
-                    corr = abs(corr_matr[0][1])
-                    #print corr[0][1]
-                hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
+        for chan1 in chans:
+            for chan2 in chans:
+                #corr = corr_matr[chan1][chan2] if chan1 != chan2 else 0
+                corr = corr_matr[chan1][chan2]
+                if chan1 != chan2:
+                    hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
 
     canv = rt.TCanvas("canv_noise","canv",1000,500)
     canv.Divide(len(hists),1,0.01,0.01)
@@ -282,7 +261,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
         hist.Draw("colz")
 
     canv.Update()
-    canv.Draw()
+    #canv.Draw()
     rt.gStyle.SetOptStat(1)
 
     #q = raw_input("continue?")
@@ -310,20 +289,21 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 4
+    sca = 2
     nchans = 64
     chan_select = "all"
 
-    for chip in range(4):
+    for chip in [0,1,2,3,"all"]:
         print(80*"#")
-        print("Analyzing: chip %i, sca %i" %(chip,sca))
+        print("Analyzing: chip %s, sca %i" %(str(chip),sca))
 
         all_data = readTree(fname, chip, sca, nchans, chan_select)
 
-        cname = run_dir + "corr_chip_%i_sca_%i_chans_%s" %(chip,sca,chan_select)
+        cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         calcCorr(all_data, cname)
 
-        cname = run_dir + "noise_chip_%i_sca_%i_chans_%s" %(chip,sca,chan_select)
+        '''
+        cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         noise_data = calcNoise(all_data)
         plotNoise(noise_data, cname)
-
+        '''
