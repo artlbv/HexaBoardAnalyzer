@@ -11,25 +11,6 @@ import ROOT as rt
 nchans = 64
 nsca = 13
 
-def load_mapping(fname = "fromDocDB/Skiroc2CMS_sensor_map_simplified.csv"):
-
-    with open(fname,"r") as csvfile: chan_map = csv.DictReader(csvfile)
-
-    ### Mapping to sensor
-    #csv_map = load_mapping()
-    sens_chans = array('i', 128 * [ -99 ])
-
-    #sens_map[chip][chan] = sensor_chan
-
-    for item in csv_map:
-        sens_chan = item['Sensor Channel']
-        chip_chan = item['IC Channel']
-        chip_num = item['IC']
-    exit()
-
-
-    return chan_map
-
 if __name__ == "__main__":
 
 
@@ -88,7 +69,7 @@ if __name__ == "__main__":
 
             # fill previous event/chip
             if event >= 0: tree.Fill()
-            #if event > 0: break
+            #if event > 10: break
 
             header_items = line.split()
             event = int(header_items[1])
@@ -105,7 +86,7 @@ if __name__ == "__main__":
             chip_b[0] = chip
             for i in range(nsca): roll_b[i] = roll[i]
 
-            #if chip == 0: print("Event %i, chip %i" % (event, chip))
+            if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
 
             # reset arrays
             for i in range(nsca):
@@ -116,8 +97,9 @@ if __name__ == "__main__":
         else:
             # check line contains data (x nsca)
             items = line.split()
+
             #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
-            if (len(items) < nsca): continue
+            if (len(items) != 15): continue
             # check there was an event header before
             if event == -99:
                 print("No event header before data line!");
@@ -125,15 +107,17 @@ if __name__ == "__main__":
 
             # read data
             #print("Reading chan %i in %s" %(chan,gain_type) )
+            items = [int(item) for item in line.split()]
 
             for i,item in enumerate(items):
                 if item == 0: items[i] == 4096
                 elif item == 4: items[i] == 0
 
+            # have to invert channel and sca number
             if gain_type == "hg":
-                for i in range(nsca): hgain_b[i*64 + chan] = int(items[12-i])
+                for i in range(nsca): hgain_b[i*nchans + nchans-1-chan] = int(items[nsca-1-i])
             elif gain_type == "lg":
-                for i in range(nsca): lgain_b[i*64 + chan] = int(items[12-i])
+                for i in range(nsca): lgain_b[i*nchans + nchans-1-chan] = int(items[nsca-1-i])
 
             # switch counters
             if chan == 63:
