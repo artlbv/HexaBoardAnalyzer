@@ -226,6 +226,8 @@ def plotNoise(noise_data, cname):
     #q = raw_input("Continue?")
     canv.SaveAs(cname+".pdf")
 
+    return canv
+
 def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
     rt.gStyle.SetOptStat(0)
     rt.gStyle.SetPadRightMargin(0.15)
@@ -267,7 +269,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
     #q = raw_input("continue?")
 
     canv.SaveAs(cname+".pdf")
-
+    return canv
 
 if __name__ == "__main__":
 
@@ -289,9 +291,11 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 2
+    sca = 0
     nchans = 64
     chan_select = "all"
+
+    outfile = rt.TFile(run_dir + "plots.root","recreate")
 
     for chip in [0,1,2,3,"all"]:
         print(80*"#")
@@ -300,10 +304,14 @@ if __name__ == "__main__":
         all_data = readTree(fname, chip, sca, nchans, chan_select)
 
         cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-        calcCorr(all_data, cname)
+        canv = calcCorr(all_data, cname)
+        outfile.cd()
+        canv.Write()
 
-        '''
         cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         noise_data = calcNoise(all_data)
-        plotNoise(noise_data, cname)
-        '''
+        canv = plotNoise(noise_data, cname)
+        outfile.cd()
+        canv.Write()
+
+    outfile.Close()
