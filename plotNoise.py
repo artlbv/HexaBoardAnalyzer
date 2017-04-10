@@ -17,7 +17,7 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         if tree.event < 1: continue
         #if tree.event < 50: continue
         #if tree.event > 100: continue
-        if tree.event > 8000: break
+        #if tree.event > 8000: break
 
         if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
 
@@ -37,15 +37,14 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
 
             if chip == "all":
                 for chan in chans[:len(chans)/4]:#range(64):
-                    val = getattr(tree,var)[isca*64 + chan % 64 ]
+                    val = getattr(tree,var)[isca*64 + (chan) % 64 ]
                     if val == 0: val = 4096
                     elif val == 4: val = 0
 
                     data[chan+tree.chip*64][var].append(val)
             else:
-                #for chan in chans:
                 for chan in chans:
-                    val = getattr(tree,var)[isca*64 + chan % 64 ]
+                    val = getattr(tree,var)[isca*64 + (chan) ]
                     if val == 0: val = 4096
                     elif val == 4: val = 0
 
@@ -88,24 +87,32 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
     print("Going to analyze these channels:")
     print(chans)
 
-    print("Starting event loop")
     # read in all channels' data
-    all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
-
     print("Reading chan data")
     chans_data = getChansData(tree,chip,chans,sca,variabs)
+    print("...done")
+    tfile.Close()
 
-    #oexit(0)
-    print("Analyzing chan data")
+    return chans_data
+
+def subtractPedestal(chans_data):
+
+    chans = chans_data.keys()
+    variabs = chans_data[chans[0]].keys()
+
+    all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
+
+    print("Subtracting pedestals...")
     for chan in chans:
-        #print("Reading chan %i" %chan)
-        #chan_data = getChanData(tree,chip,chan,sca,variabs)
         chan_data = chans_data[chan]
 
         # Pedestal subtraction
         for var,values in chan_data.items():
             chan_ped = values.mean()
             chan_ped_std = values.std()
+
+            #if "hg" in var: print chan, chan_ped, chan_ped_std
+
             if chan_ped_std < -3.0:
                 print(80*"!")
                 print chan, chan_ped, chan_ped_std
@@ -117,11 +124,60 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
                 #if chan < 2:
                 #    print all_chan_data[chan][var]
 
-    print("Finished event loop")
-
-    tfile.Close()
+    print("...done")
 
     return all_chan_data
+
+def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
+    rt.gStyle.SetOptStat(0)
+
+    chans = all_chan_data.keys()
+    variabs = all_chan_data[chans[0]].keys()
+    nchans = chans[-1]
+
+    hists = []
+
+    if "ped" in cname: name = "pedestal"
+    elif "rms" in cname: name = "rms"
+    else: name = ""
+
+    for var in variabs:
+        hist = rt.TH1F("h_ped_"+var,name +" for "+var,nchans,0,nchans)
+
+        for chan in chans:
+
+            chan_data = all_chan_data[chan][var]
+
+            chan_ped = chan_data.mean()
+            chan_rms = chan_data.std()
+
+            #print var,chan,chan_ped,chan_rms
+            if chan_ped < -90.1: # means we are analyzing ped subtracted data
+                hist.SetBinContent(chan+1,chan_rms)
+            else:
+                hist.SetBinContent(chan+1,chan_ped)
+                hist.SetBinError(chan+1,chan_rms)
+
+            if chan_ped < 1 and chan_rms > 3:
+                print "## High RMS", var,chan,chan_rms
+
+        hists.append(hist)
+
+    canv = rt.TCanvas("canv_ped","canv",1000,500)
+    canv.Divide(len(hists),1,0.01,0.01)
+
+    for i,hist in enumerate(hists):
+        canv.cd(i+1)
+        hist.Draw("colz")
+
+    canv.Update()
+    canv.Draw()
+    rt.gStyle.SetOptStat(1)
+
+    #q = raw_input("continue?")
+
+    canv.SaveAs(cname+".pdf")
+    return canv
 
 def calcNoise(all_chan_data):
 
@@ -218,7 +274,7 @@ def plotNoise(noise_data, cname):
     canv.Divide(len(h_order),len(hists)/len(h_order),0.01,0.01)
     for i, hist in enumerate(hists):
         canv.cd(i+1)
-        hist.Draw()
+        hist.Draw("")
 
     #canv.Draw()
     canv.Update()
@@ -249,10 +305,12 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
 
         for chan1 in chans:
             for chan2 in chans:
-                #corr = corr_matr[chan1][chan2] if chan1 != chan2 else 0
-                corr = corr_matr[chan1][chan2]
+                corr = abs(corr_matr[chan1][chan2])
                 if chan1 != chan2:
                     hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
+
+                    #if corr > 3*corr_matr.mean() : print chan1, chan2, corr
+                    if corr > corr_matr.mean() + 3*corr_matr.std(): print "## Corr", var, chan1, chan2, corr
 
     canv = rt.TCanvas("canv_noise","canv",1000,500)
     canv.Divide(len(hists),1,0.01,0.01)
@@ -273,6 +331,12 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
 
 if __name__ == "__main__":
 
+    '''
+    if '-b' in sys.argv:
+        sys.argv.remove('-b')
+        _batchMode = True
+    '''
+
     if len(sys.argv) > 1:
         fname = sys.argv[1]
         print '# Input files are', fname
@@ -284,6 +348,8 @@ if __name__ == "__main__":
 
         print("Using " + fname)
 
+
+    fname = fname.replace(".txt",".root")
     #fnames = glob.glob(fname)
     run_name = fname.replace('.root','')
     run_dir = run_name + '_plots/'
@@ -297,11 +363,22 @@ if __name__ == "__main__":
 
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
-    for chip in [0,1,2,3,"all"]:
+    chips = [0,1,2,3,"all"]
+    #chips = ["all"]
+
+    for chip in chips:
         print(80*"#")
         print("Analyzing: chip %s, sca %i" %(str(chip),sca))
 
-        all_data = readTree(fname, chip, sca, nchans, chan_select)
+        raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
+        all_data = subtractPedestal(raw_all_data)
+
+        cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+        makePedPlot(raw_all_data,cname)
+        cname = run_dir + "rms_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+        makePedPlot(all_data,cname)
+
+        #continue
 
         cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         canv = calcCorr(all_data, cname)
