@@ -48,6 +48,12 @@ if __name__ == "__main__":
     # charges
     hgain_b = array('i', nchips * nsca * nchans * [ -99 ])
     lgain_b = array('i', nchips * nsca * nchans * [ -99 ])
+    # tot
+    tot_fast_b = array('i', nchips * nchans * [ -99 ])
+    tot_slow_b = array('i', nchips * nchans * [ -99 ])
+    # toa
+    toa_rise_b = array('i', nchips * nchans * [ -99 ])
+    toa_fall_b = array('i', nchips * nchans * [ -99 ])
 
     # tree branches
     ## sk2cms data
@@ -56,6 +62,10 @@ if __name__ == "__main__":
     tree.Branch( 'roll', roll_b, 'roll[13]/I' )
     tree.Branch( 'hg', hgain_b, 'hg[4][13][64]/I' )
     tree.Branch( 'lg', lgain_b, 'lg[4][13][64]/I' )
+    tree.Branch( 'tot_fast', tot_fast_b, 'tot_fast[4][64]/I' )
+    tree.Branch( 'tot_slow', tot_slow_b, 'tot_slow[4][64]/I' )
+    tree.Branch( 'toa_rise', toa_rise_b, 'toa_rise[4][64]/I' )
+    tree.Branch( 'toa_fall', toa_fall_b, 'toa_fall[4][64]/I' )
 
     event = -99
     gain_type = "lg"
@@ -70,8 +80,8 @@ if __name__ == "__main__":
             if chan != 0: print("Channel number incorrect!!!!!")
 
             # fill previous event/chip
-            if event > 0 and chip == 3: tree.Fill()
-            #if event > 1000: break
+            if event > 1 and chip == 3: tree.Fill()
+            #if event > 10: break
 
             header_items = line.split()
             event = int(header_items[1])
@@ -91,9 +101,16 @@ if __name__ == "__main__":
             if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
 
             # reset arrays
-            for i in range(nsca):
+            for k in [chip]:
                 for j in range(nchans):
-                    for k in [chip]:
+
+                    tot_fast_b[k*nchans + j] = -99
+                    tot_slow_b[k*nchans + j] = -99
+                    toa_rise_b[k*nchans + j] = -99
+                    toa_fall_b[k*nchans + j] = -99
+
+                    for i in range(nsca):
+
                         hgain_b[k*nchans*nsca + i*nchans + j] = -99
                         lgain_b[k*nchans*nsca + i*nchans + j] = -99
 
@@ -112,15 +129,25 @@ if __name__ == "__main__":
             #print("Reading chan %i in %s" %(chan,gain_type) )
             items = [int(item) for item in line.split()]
 
+            # convert over/undershoot
             for i,item in enumerate(items):
-                if item == 0: items[i] == 4096
-                elif item == 4: items[i] == 0
+                if item == 0: items[i] = 4096
+                elif item == 4: items[i] = 0
 
             # have to invert channel and sca number
             if gain_type == "hg":
+                # fill charge
                 for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                # fill toa/tot
+                toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
+                tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
             elif gain_type == "lg":
+                # fill charge
                 for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                # fill tot/toa
+                toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
+                tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
+
 
             # switch counters
             if chan == 63:
