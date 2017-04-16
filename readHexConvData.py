@@ -8,6 +8,7 @@ print("Loading ROOT")
 import ROOT as rt
 
 # global variables
+nchips = 4
 nchans = 64
 nsca = 13
 
@@ -27,7 +28,7 @@ if __name__ == "__main__":
         print("Using " + fname)
 
     fin = open(fname,"read")
-    foutname = fname.replace('.txt','.root')
+    foutname = fname.replace('.txt','_new.root')
     print("Storing data in " + foutname)
 
     fout = rt.TFile( foutname, 'recreate' )
@@ -45,20 +46,21 @@ if __name__ == "__main__":
     roll_b = array('i', nsca * [ 0 ])
 
     # charges
-    hgain_b = array('i', nsca * nchans * [ -99 ])
-    lgain_b = array('i', nsca * nchans * [ -99 ])
+    hgain_b = array('i', nchips * nsca * nchans * [ -99 ])
+    lgain_b = array('i', nchips * nsca * nchans * [ -99 ])
 
     # tree branches
     ## sk2cms data
     tree.Branch( 'event', event_b, 'event/I' )
     tree.Branch( 'chip', chip_b, 'chip/I' )
     tree.Branch( 'roll', roll_b, 'roll[13]/I' )
-    tree.Branch( 'hg', hgain_b, 'hg[13][64]/I' )
-    tree.Branch( 'lg', lgain_b, 'lg[13][64]/I' )
+    tree.Branch( 'hg', hgain_b, 'hg[4][13][64]/I' )
+    tree.Branch( 'lg', lgain_b, 'lg[4][13][64]/I' )
 
     event = -99
     gain_type = "lg"
     chan = 0
+    chip = -99
 
     print("Reading file")
     for line in fin.readlines():#[:1000]:
@@ -68,8 +70,8 @@ if __name__ == "__main__":
             if chan != 0: print("Channel number incorrect!!!!!")
 
             # fill previous event/chip
-            if event >= 0: tree.Fill()
-            #if event > 10: break
+            if event > 0 and chip == 3: tree.Fill()
+            #if event > 1000: break
 
             header_items = line.split()
             event = int(header_items[1])
@@ -91,8 +93,9 @@ if __name__ == "__main__":
             # reset arrays
             for i in range(nsca):
                 for j in range(nchans):
-                    hgain_b[i*64+j] = -99
-                    lgain_b[i*64+j] = -99
+                    for k in [chip]:
+                        hgain_b[k*nchans*nsca + i*nchans + j] = -99
+                        lgain_b[k*nchans*nsca + i*nchans + j] = -99
 
         else:
             # check line contains data (x nsca)
@@ -115,9 +118,9 @@ if __name__ == "__main__":
 
             # have to invert channel and sca number
             if gain_type == "hg":
-                for i in range(nsca): hgain_b[i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
             elif gain_type == "lg":
-                for i in range(nsca): lgain_b[i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
 
             # switch counters
             if chan == 63:

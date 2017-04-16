@@ -152,8 +152,8 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
             chan_rms = chan_data.std()
 
             #print var,chan,chan_ped,chan_rms
-            if chan_ped < -90.1: # means we are analyzing ped subtracted data
-                hist.SetBinContent(chan+1,chan_rms)
+            if chan_ped < 0.1: # means we are analyzing ped subtracted data
+                hist.SetBinContent(chan+1,min(5,chan_rms))
             else:
                 hist.SetBinContent(chan+1,chan_ped)
                 hist.SetBinError(chan+1,chan_rms)
@@ -375,7 +375,7 @@ if __name__ == "__main__":
 
         cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         makePedPlot(raw_all_data,cname)
-        cname = run_dir + "rms_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+        cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         makePedPlot(all_data,cname)
 
         #continue
