@@ -19,11 +19,12 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         #if tree.event > 100: continue
         #if tree.event > 8000: break
 
-        if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
+        #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
+        if tree.event % 10 == 0: print("Event: %i" % tree.event)
 
         # check chip
-        if chip != "all":
-            if tree.chip != chip: continue
+        #if chip != "all":
+        #    if tree.chip != chip: continue
 
         # check sca is not in roll mode!
         if tree.roll[sca] == 1: continue
@@ -41,10 +42,10 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
                     if val == 0: val = 4096
                     elif val == 4: val = 0
 
-                    data[chan+tree.chip*64][var].append(val)
+                    data[chan + chip*64][var].append(val)
             else:
                 for chan in chans:
-                    val = getattr(tree,var)[isca*64 + (chan) ]
+                    val = getattr(tree,var)[chip *64*13 + isca*64 + (chan) ]
                     if val == 0: val = 4096
                     elif val == 4: val = 0
 
@@ -296,6 +297,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
     for var in variabs:
         #hist = rt.TH2F("h_corr_"+var,"correlation for "+var,64,0,64,64,0,64)
         hist = rt.TH2F("h_corr_"+var,"correlation for "+var,nchans,0,nchans,nchans,0,nchans)
+        rt.SetOwnership(hist,0)
         hists["h_corr_"+var] = hist
 
     # compute correlations and fill histos
