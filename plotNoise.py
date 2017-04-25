@@ -20,7 +20,7 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         #if tree.event > 8000: break
 
         #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
-        if tree.event % 10 == 0: print("Event: %i" % tree.event)
+        if tree.event % 100 == 0: print("Event: %i" % tree.event)
 
         # check chip
         #if chip != "all":
@@ -37,12 +37,13 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
             else: isca = sca
 
             if chip == "all":
-                for chan in chans[:len(chans)/4]:#range(64):
-                    val = getattr(tree,var)[isca*64 + (chan) % 64 ]
+                for chan in chans:#[:len(chans)/4]:#range(64):
+                    chip_nb = chan/64
+                    val = getattr(tree,var)[chip_nb*64*13 + isca*64 + (chan)%64 ]
                     if val == 0: val = 4096
                     elif val == 4: val = 0
 
-                    data[chan + chip*64][var].append(val)
+                    data[chan][var].append(val)
             else:
                 for chan in chans:
                     val = getattr(tree,var)[chip *64*13 + isca*64 + (chan) ]
@@ -365,8 +366,9 @@ if __name__ == "__main__":
 
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
-    chips = [0,1,2,3,"all"]
+    #chips = [0,1,2,3]#,"all"]
     #chips = ["all"]
+    chips = [0,1,2,3,"all"]
 
     for chip in chips:
         print(80*"#")
