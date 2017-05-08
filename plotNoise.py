@@ -151,8 +151,8 @@ def subtractPedestal(chans_data):
                 all_chan_data[chan][var] = np.subtract(values,10000)
             else:
                 # subtract pedestal from values
-                #all_chan_data[chan][var] = np.subtract(values,chan_ped)
-                all_chan_data[chan][var] = values
+                all_chan_data[chan][var] = np.subtract(values,chan_ped)
+                #all_chan_data[chan][var] = values
                 #if chan < 2:
                 #    print all_chan_data[chan][var]
 
@@ -184,7 +184,7 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
             chan_rms = chan_data.std()
 
             #print var,chan,chan_ped,chan_rms
-            if chan_ped > 0.1: # means we are analyzing ped subtracted data
+            if chan_ped < 10: # means we are analyzing ped subtracted data
                 hist.SetBinContent(chan+1,min(5,chan_rms))
             else:
                 hist.SetBinContent(chan+1,chan_ped)
@@ -428,9 +428,10 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
         # Plot values in Hexagon
         hHex_ped = rt.SingleLayerPlot()
-        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Pedestal (ADC) for " + var)
+        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Pedestal (ADC) for " + var + suffix.replace('_',' '))
         hHex_rms = rt.SingleLayerPlot()
-        hHex_rms.SetName("rms_"+var); hHex_rms.SetTitle("Ped RMS (ADC) for " + var)
+        hHex_rms.SetName("rms_"+var); hHex_rms.SetTitle("Ped RMS (ADC) for " + var + suffix.replace('_',' '))
+
         for hex_cell in range(133):
             sens_chan = hexmap[hex_cell]
             (chip,chip_chan) = sens_map[sens_chan]
@@ -484,15 +485,15 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 5
+    sca = 0
     nchans = 64
     chan_select = "all"
 
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
     #chips = [0,1,2,3]#,"all"]
-    chips = ["all"]
-    #chips = [0,1,2,3,"all"]
+    #chips = ["all"]
+    chips = [0,1,2,3,"all"]
 
     for chip in chips:
         print(80*"#")
@@ -501,7 +502,6 @@ if __name__ == "__main__":
         raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
         all_data = subtractPedestal(raw_all_data)
 
-        '''
         cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         makePedPlot(raw_all_data,cname)
         cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
@@ -519,11 +519,10 @@ if __name__ == "__main__":
         canv = plotNoise(noise_data, cname)
         outfile.cd()
         canv.Write()
-        '''
 
         if chip == "all":
             #foutname = run_dir + "avg_rms_summary.txt"
             suffix = "_sca_%s" %sca
-            print_rms(all_data, run_dir, suffix)
+            print_rms(raw_all_data, run_dir, suffix)
 
     outfile.Close()
