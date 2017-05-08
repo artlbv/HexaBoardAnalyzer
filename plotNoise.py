@@ -362,7 +362,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
     canv.SaveAs(cname+".pdf")
     return canv
 
-def print_rms(all_chan_data, foutname = "rms_avg.txt"):
+def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt"):
     chans = all_chan_data.keys()#[:3]
     variabs = all_chan_data[chans[0]].keys()
     nchans = chans[-1]
@@ -372,6 +372,7 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
     rms_data = {}
 
     #print chans
+    foutname = outdir + "avg_rms_summary" + suffix + ".txt"
     fout = open(foutname,"w")
 
     #for var in ['hg']:#variabs:
@@ -405,6 +406,7 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
         #print rms_data
         #print len(chans), len(rms_data)
 
+        fout.write(var + "\n")
         for sens_chan in sens_map:
             (chip,chip_chan) = sens_map[sens_chan]
 
@@ -420,7 +422,7 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
             #print("%.2f %.2f" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
             fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
 
-        canv = rt.TCanvas("canv_hexa","hex",1200,600)
+        canv = rt.TCanvas("hexa_"+var,"hex",1300,600)
         canv.Divide(2,1)
         rt.gStyle.SetOptStat(0)
 
@@ -428,7 +430,7 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
         hHex_ped = rt.SingleLayerPlot()
         hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Pedestal (ADC) for " + var)
         hHex_rms = rt.SingleLayerPlot()
-        hHex_rms.SetName("rms_"+var); hHex_ped.SetTitle("Ped RMS (ADC) for " + var)
+        hHex_rms.SetName("rms_"+var); hHex_rms.SetTitle("Ped RMS (ADC) for " + var)
         for hex_cell in range(133):
             sens_chan = hexmap[hex_cell]
             (chip,chip_chan) = sens_map[sens_chan]
@@ -443,7 +445,8 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
         hHex_rms.Draw("colz text")
         canv.Update()
 
-        q = raw_input("wait")
+        canv.SaveAs(outdir+ canv.GetName()+suffix+".pdf")
+        #q = raw_input("wait")
 
     fout.close()
 
@@ -481,7 +484,7 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 0
+    sca = 5
     nchans = 64
     chan_select = "all"
 
@@ -519,7 +522,8 @@ if __name__ == "__main__":
         '''
 
         if chip == "all":
-            foutname = run_dir + "avg_rms_summary.txt"
-            print_rms(all_data, foutname)
+            #foutname = run_dir + "avg_rms_summary.txt"
+            suffix = "_sca_%s" %sca
+            print_rms(all_data, run_dir, suffix)
 
     outfile.Close()
