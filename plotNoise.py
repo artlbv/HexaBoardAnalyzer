@@ -24,7 +24,12 @@ def getSensorMap():
     return sens_map
 
 def getHexMap():
-    return [14,23,33,43,54,65,76,87,98,108,116,122,13,22,32,
+    return [104,104,81,92,103,113,121,
+            58,69,80,91,102,112,120,126,
+            25,46,57,68,79,90,101,111,119,125,127,
+            25,35,45,56,67,78,89,100,110,118,124,127,
+            24,34,44,55,66,77,88,99,109,117,123,
+            14,23,33,43,54,65,76,87,98,108,116,122,13,22,32,
             42,53,64,75,86,97,107,115,6,12,21,31,41,52,63,74,
             85,96,106,114,5,11,20,30,40,51,62,73,84,95,105,1,
             4,10,19,29,39,50,61,72,83,94,93,1,3,9,18,28,38,49,
@@ -370,6 +375,8 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
     fout = open(foutname,"w")
 
     #for var in ['hg']:#variabs:
+    sens_map = getSensorMap()
+    hexmap = getHexMap()
     rt.gROOT.LoadMacro("SingleLayer.C")
 
     for var in variabs:
@@ -398,12 +405,6 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
         #print rms_data
         #print len(chans), len(rms_data)
 
-        sens_map = getSensorMap()
-        #print sens_map
-        # get hexagon
-        hHexagon = rt.SingleLayerPlot()
-        hexmap = getHexMap()
-
         for sens_chan in sens_map:
             (chip,chip_chan) = sens_map[sens_chan]
 
@@ -419,19 +420,34 @@ def print_rms(all_chan_data, foutname = "rms_avg.txt"):
             #print("%.2f %.2f" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
             fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
 
-        '''
-        for hex_cell in range(134):
-            sens_chan = hexmap[hex_cell-1]
+        canv = rt.TCanvas("canv_hexa","hex",1200,600)
+        canv.Divide(2,1)
+        rt.gStyle.SetOptStat(0)
+
+        # Plot values in Hexagon
+        hHex_ped = rt.SingleLayerPlot()
+        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Pedestal (ADC) for " + var)
+        hHex_rms = rt.SingleLayerPlot()
+        hHex_rms.SetName("rms_"+var); hHex_ped.SetTitle("Ped RMS (ADC) for " + var)
+        for hex_cell in range(133):
+            sens_chan = hexmap[hex_cell]
             (chip,chip_chan) = sens_map[sens_chan]
             glob_chan = chip * 64 + chip_chan
-            print hex_cell, sens_chan, glob_chan
-            hHexagon.SetBinContent(sens_chan+1, rms_data[glob_chan][0])
+            #print hex_cell, sens_chan, glob_chan
+            hHex_ped.SetBinContent(hex_cell+1, int(rms_data[glob_chan][0]))
+            hHex_rms.SetBinContent(hex_cell+1, round(rms_data[glob_chan][1],2))
 
-        hHexagon.Draw("colz text")
+        canv.cd(1)
+        hHex_ped.Draw("colz text")
+        canv.cd(2)
+        hHex_rms.Draw("colz text")
+        canv.Update()
+
         q = raw_input("wait")
-        '''
 
     fout.close()
+
+    rt.gStyle.SetOptStat(0)
 
     return 1
 
