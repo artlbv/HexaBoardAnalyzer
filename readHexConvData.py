@@ -28,7 +28,8 @@ if __name__ == "__main__":
         print("Using " + fname)
 
     fin = open(fname,"read")
-    foutname = fname.replace('.txt','_new.root')
+    #foutname = fname.replace('.txt','_new.root')
+    foutname = fname.replace('.txt','.root')
     print("Storing data in " + foutname)
 
     fout = rt.TFile( foutname, 'recreate' )
@@ -80,7 +81,7 @@ if __name__ == "__main__":
             if chan != 0: print("Channel number incorrect!!!!!")
 
             # fill previous event/chip
-            if event > 1 and chip == 3: tree.Fill()
+            if event >= 0 and chip == 3: tree.Fill()
             #if event > 10: break
 
             header_items = line.split()
@@ -119,7 +120,7 @@ if __name__ == "__main__":
             items = line.split()
 
             #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
-            if (len(items) != 15): continue
+            if (len(items) != 13): continue
             # check there was an event header before
             if event == -99:
                 print("No event header before data line!");
@@ -139,14 +140,16 @@ if __name__ == "__main__":
                 # fill charge
                 for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
                 # fill toa/tot
-                toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
-                tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
+                if (len(items) == 15):
+                    toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
+                    tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
             elif gain_type == "lg":
                 # fill charge
                 for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
                 # fill tot/toa
-                toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
-                tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
+                if (len(items) == 15):
+                    toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
+                    tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
 
 
             # switch counters
