@@ -6,6 +6,30 @@ import ROOT as rt
 
 #rt.TGaxis.SetMaxDigits(3)
 
+def getSensorMap():
+
+    sens_map = {}
+    fmap = open("//Users/artur/Dropbox/Work/LLR/HGCAL/SK2cms/hexaboard/fromDocDB/Skiroc2CMS_sensor_map_simplified.csv","r")
+
+    for line in fmap.readlines():
+        #print len(line.split(','))
+        if 'Chan' in line: continue
+        if len(line.split(',')) != 3: continue
+
+        (sens_chan,chip,chip_chan) = line.split(',')
+
+        #sens_map[(int(chip),int(chip_chan))] = int(sens_chan)
+        sens_map[int(sens_chan)] = (int(chip),int(chip_chan))
+
+    return sens_map
+
+def getHexMap():
+    return [14,23,33,43,54,65,76,87,98,108,116,122,13,22,32,
+            42,53,64,75,86,97,107,115,6,12,21,31,41,52,63,74,
+            85,96,106,114,5,11,20,30,40,51,62,73,84,95,105,1,
+            4,10,19,29,39,50,61,72,83,94,93,1,3,9,18,28,38,49,
+            60,71,82,93,2,8,17,27,37,48,59,70,7,16,26,36,47,15,15]
+
 ########################
 def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
 
@@ -122,7 +146,8 @@ def subtractPedestal(chans_data):
                 all_chan_data[chan][var] = np.subtract(values,10000)
             else:
                 # subtract pedestal from values
-                all_chan_data[chan][var] = np.subtract(values,chan_ped)
+                #all_chan_data[chan][var] = np.subtract(values,chan_ped)
+                all_chan_data[chan][var] = values
                 #if chan < 2:
                 #    print all_chan_data[chan][var]
 
@@ -154,7 +179,7 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
             chan_rms = chan_data.std()
 
             #print var,chan,chan_ped,chan_rms
-            if chan_ped < 0.1: # means we are analyzing ped subtracted data
+            if chan_ped > 0.1: # means we are analyzing ped subtracted data
                 hist.SetBinContent(chan+1,min(5,chan_rms))
             else:
                 hist.SetBinContent(chan+1,chan_ped)
@@ -332,7 +357,86 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
     canv.SaveAs(cname+".pdf")
     return canv
 
+def print_rms(all_chan_data, foutname = "rms_avg.txt"):
+    chans = all_chan_data.keys()#[:3]
+    variabs = all_chan_data[chans[0]].keys()
+    nchans = chans[-1]
+
+    #rms_data = { chip:{chan:() for chan in chans} for chip in range(4)}
+    #rms_data = { chip:{} for chip in range(4)}
+    rms_data = {}
+
+    #print chans
+    fout = open(foutname,"w")
+
+    #for var in ['hg']:#variabs:
+    rt.gROOT.LoadMacro("SingleLayer.C")
+
+    for var in variabs:
+        print(var)
+
+        for chan in chans:
+
+            chan_data = all_chan_data[chan][var]
+
+            chan_ped = chan_data.mean()
+            chan_rms = chan_data.std()
+
+            chip = chan/64
+            real_chan = chan/4
+
+            #print chan, chip, real_chan
+
+            '''
+            if (chip,real_chan) in rms_data:
+                print "already in", chip, real_chan
+            else:
+                rms_data[(chip,real_chan)] = (chan_ped,chan_rms)
+            '''
+            rms_data[chan] = (chan_ped,chan_rms)
+
+        #print rms_data
+        #print len(chans), len(rms_data)
+
+        sens_map = getSensorMap()
+        #print sens_map
+        # get hexagon
+        hHexagon = rt.SingleLayerPlot()
+        hexmap = getHexMap()
+
+        for sens_chan in sens_map:
+            (chip,chip_chan) = sens_map[sens_chan]
+
+            #print chip, chan
+            #print sens_chan, rms_data[chip][chan]
+            #if chip in rms_data:
+            #    if chan in rms_data:
+            #        print sens_chan, chip, chan
+            #if (chip,chip_chan) in rms_data:
+            #    print chip, chip_chan, rms_data[(chip,chip_chan)]
+            glob_chan = chip * 64 + chip_chan
+            #print chip, chip_chan, rms_data[glob_chan]
+            #print("%.2f %.2f" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
+            fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
+
+        '''
+        for hex_cell in range(134):
+            sens_chan = hexmap[hex_cell-1]
+            (chip,chip_chan) = sens_map[sens_chan]
+            glob_chan = chip * 64 + chip_chan
+            print hex_cell, sens_chan, glob_chan
+            hHexagon.SetBinContent(sens_chan+1, rms_data[glob_chan][0])
+
+        hHexagon.Draw("colz text")
+        q = raw_input("wait")
+        '''
+
+    fout.close()
+
+    return 1
+
 if __name__ == "__main__":
+
 
     '''
     if '-b' in sys.argv:
@@ -355,6 +459,7 @@ if __name__ == "__main__":
     fname = fname.replace(".txt",".root")
     #fnames = glob.glob(fname)
     run_name = fname.replace('.root','')
+    #run_dir = run_name + '_plots_nopedsub/'
     run_dir = run_name + '_plots/'
     if not os.path.exists(run_dir): os.makedirs(run_dir)
     print("Output dir: " + run_dir)
@@ -367,8 +472,8 @@ if __name__ == "__main__":
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
     #chips = [0,1,2,3]#,"all"]
-    #chips = ["all"]
-    chips = [0,1,2,3,"all"]
+    chips = ["all"]
+    #chips = [0,1,2,3,"all"]
 
     for chip in chips:
         print(80*"#")
@@ -377,6 +482,7 @@ if __name__ == "__main__":
         raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
         all_data = subtractPedestal(raw_all_data)
 
+        '''
         cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
         makePedPlot(raw_all_data,cname)
         cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
@@ -394,5 +500,10 @@ if __name__ == "__main__":
         canv = plotNoise(noise_data, cname)
         outfile.cd()
         canv.Write()
+        '''
+
+        if chip == "all":
+            foutname = run_dir + "avg_rms_summary.txt"
+            print_rms(all_data, foutname)
 
     outfile.Close()
