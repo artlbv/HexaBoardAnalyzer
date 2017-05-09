@@ -120,7 +120,8 @@ if __name__ == "__main__":
             items = line.split()
 
             #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
-            if (len(items) != 13): continue
+            if (len(items) != 15):
+                if (len(items) != 13): continue
             # check there was an event header before
             if event == -99:
                 print("No event header before data line!");
