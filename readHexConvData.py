@@ -12,6 +12,33 @@ nchips = 4
 nchans = 64
 nsca = 13
 
+def getTimePos(roll):
+
+    roll_np = np.array(roll)
+    timepos = np.array(range(13))
+
+    # roll/shift positions
+    if (roll_np[0] == 1 and roll_np[12] == 1):
+        # 100000000001
+        timepos[0] = 12
+        for i in range(1,13): timepos[i] = i-1
+    else:
+        # 000011000000
+        # 1. find first sca in track
+        pos_trk1 = -1
+        for i in range(13):
+            if roll[i] == 1:
+                pos_trk1 = i
+                break
+        # 2. shift all positions
+        for i in range(13):
+            if i <= pos_trk1 + 1: timepos[i] = i + 12 - (pos_trk1 + 1)
+            else: timepos[i] = i - (pos_trk1 + 1)
+
+    #print roll_np, timepos
+
+    return timepos
+
 if __name__ == "__main__":
 
 
@@ -45,6 +72,7 @@ if __name__ == "__main__":
     # roll position: roll[13] of 1 or 0
     #roll_b = np.array(nsca * [ 0 ], dtype=int)
     roll_b = array('i', nsca * [ 0 ])
+    ts_b = array('i', nsca * [ 0 ])
 
     # charges
     hgain_b = array('i', nchips * nsca * nchans * [ -99 ])
@@ -61,6 +89,7 @@ if __name__ == "__main__":
     tree.Branch( 'event', event_b, 'event/I' )
     tree.Branch( 'chip', chip_b, 'chip/I' )
     tree.Branch( 'roll', roll_b, 'roll[13]/I' )
+    tree.Branch( 'timesamp', ts_b, 'timesamp[13]/I' )
     tree.Branch( 'hg', hgain_b, 'hg[4][13][64]/I' )
     tree.Branch( 'lg', lgain_b, 'lg[4][13][64]/I' )
     tree.Branch( 'tot_fast', tot_fast_b, 'tot_fast[4][64]/I' )
@@ -98,6 +127,11 @@ if __name__ == "__main__":
             event_b[0] = event
             chip_b[0] = chip
             for i in range(nsca): roll_b[i] = roll[i]
+            #print roll, roll_b
+
+            # time pos
+            timepos = getTimePos(roll)
+            for i in range(nsca): ts_b[i] = timepos[i]
 
             if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
 
