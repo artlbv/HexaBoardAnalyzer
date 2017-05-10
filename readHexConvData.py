@@ -33,7 +33,7 @@ def getTimePos(roll):
         # 2. shift all positions
         for i in range(13):
             if i <= pos_trk1 + 1: timepos[i] = i + 12 - (pos_trk1 + 1)
-            else: timepos[i] = i - (pos_trk1 + 1)
+            else: timepos[i] = i - 1 - (pos_trk1 + 1)
 
     #print roll_np, timepos
 
