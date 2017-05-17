@@ -44,9 +44,11 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
     for ientry, entry in enumerate(tree):
         # skip first event
         if tree.event < 1: continue
+        #if tree.event > 1: continue
         #if tree.event < 50: continue
         #if tree.event > 100: continue
         #if tree.event > 8000: break
+        #if tree.event > 900: break
 
         #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
         if tree.event % 100 == 0: print("Event: %i" % tree.event)
@@ -69,16 +71,12 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
                 for chan in chans:#[:len(chans)/4]:#range(64):
                     chip_nb = chan/64
                     val = getattr(tree,var)[chip_nb*64*13 + isca*64 + (chan)%64 ]
-                    if val == 0: val = 4096
-                    elif val == 4: val = 0
 
-                    data[chan][var].append(val)
+                    if val > 0:
+                        data[chan][var].append(val)
             else:
                 for chan in chans:
                     val = getattr(tree,var)[chip *64*13 + isca*64 + (chan) ]
-                    if val == 0: val = 4096
-                    elif val == 4: val = 0
-
                     data[chan][var].append(val)
 
     # Convert lists to numpy arrays
@@ -139,7 +137,8 @@ def subtractPedestal(chans_data):
 
         # Pedestal subtraction
         for var,values in chan_data.items():
-            chan_ped = values.mean()
+            #chan_ped = values.mean()
+            chan_ped = np.median(values)
             chan_ped_std = values.std()
 
             #if "hg" in var: print chan, chan_ped, chan_ped_std
@@ -152,6 +151,7 @@ def subtractPedestal(chans_data):
             else:
                 # subtract pedestal from values
                 all_chan_data[chan][var] = np.subtract(values,chan_ped)
+                #all_chan_data[chan][var] = np.subtract(values,200)
                 #all_chan_data[chan][var] = values
                 #if chan < 2:
                 #    print all_chan_data[chan][var]
@@ -190,8 +190,8 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
                 hist.SetBinContent(chan+1,chan_ped)
                 hist.SetBinError(chan+1,chan_rms)
 
-            if chan_ped < 1 and chan_rms > 3:
-                print "## High RMS", var,chan,chan_rms
+            #if chan_ped < 1 and chan_rms > 3:
+            #    print "## High RMS", var,chan,chan_rms
 
         hists.append(hist)
 
@@ -250,13 +250,14 @@ def calcNoise(all_chan_data):
             inc_noise = sumAS / math.sqrt(n_valid_chans)
             coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / n_valid_chans
 
+            '''
             if abs(sumAS) > 1500:
                 print("Suspiciously large AS: %i in event %i" %(sumAS,event))
                 continue
             if abs(sumDS) > 1500:
                 print("Suspiciously large DS: %i in event %i" %(sumDS,event))
                 continue
-
+            '''
             if sumDS > 150:
                 #print("SumDS: %f, event %i" % (sumDS, event))
                 noise_data[var + "_large_sumDS"].append(event)
@@ -343,7 +344,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
                     hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
 
                     #if corr > 3*corr_matr.mean() : print chan1, chan2, corr
-                    if corr > corr_matr.mean() + 3*corr_matr.std(): print "## Corr", var, chan1, chan2, corr
+                    #if corr > corr_matr.mean() + 3*corr_matr.std(): print "## Corr", var, chan1, chan2, corr
 
     canv = rt.TCanvas("canv_noise","canv",1000,500)
     canv.Divide(len(hists),1,0.01,0.01)
@@ -428,7 +429,7 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
         # Plot values in Hexagon
         hHex_ped = rt.SingleLayerPlot()
-        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Pedestal (ADC) for " + var + suffix.replace('_',' '))
+        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Mean (ADC) for " + var + suffix.replace('_',' '))
         hHex_rms = rt.SingleLayerPlot()
         hHex_rms.SetName("rms_"+var); hHex_rms.SetTitle("Ped RMS (ADC) for " + var + suffix.replace('_',' '))
 
@@ -485,44 +486,46 @@ if __name__ == "__main__":
     print("Output dir: " + run_dir)
 
     #chip = 0
-    sca = 0
+    sca = 6
     nchans = 64
     chan_select = "all"
 
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
     #chips = [0,1,2,3]#,"all"]
-    #chips = ["all"]
-    chips = [0,1,2,3,"all"]
+    chips = ["all"]
+    #chips = [0,1,2,3,"all"]
 
-    for chip in chips:
-        print(80*"#")
-        print("Analyzing: chip %s, sca %i" %(str(chip),sca))
+    for sca in [0]:#range(13):
+        for chip in chips:
+            print(80*"#")
+            print("Analyzing: chip %s, sca %i" %(str(chip),sca))
 
-        raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
-        all_data = subtractPedestal(raw_all_data)
+            raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
+            all_data = subtractPedestal(raw_all_data)
 
-        cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-        makePedPlot(raw_all_data,cname)
-        cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-        makePedPlot(all_data,cname)
+            cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+            makePedPlot(raw_all_data,cname)
+            cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+            makePedPlot(all_data,cname)
 
-        #continue
+            #continue
 
-        cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-        canv = calcCorr(all_data, cname)
-        outfile.cd()
-        canv.Write()
+            cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+            canv = calcCorr(all_data, cname)
+            outfile.cd()
+            canv.Write()
 
-        cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-        noise_data = calcNoise(all_data)
-        canv = plotNoise(noise_data, cname)
-        outfile.cd()
-        canv.Write()
+            cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+            noise_data = calcNoise(all_data)
+            canv = plotNoise(noise_data, cname)
+            outfile.cd()
+            canv.Write()
 
-        if chip == "all":
-            #foutname = run_dir + "avg_rms_summary.txt"
-            suffix = "_sca_%s" %sca
-            print_rms(raw_all_data, run_dir, suffix)
+            if chip == "all":
+                #foutname = run_dir + "avg_rms_summary.txt"
+                suffix = "_sca_%s" %sca
+                #print_rms(raw_all_data, run_dir, suffix)
+                print_rms(all_data, run_dir, suffix)
 
     outfile.Close()
