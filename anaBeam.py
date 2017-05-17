@@ -45,41 +45,16 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
         # skip first event
         if tree.event < 0: continue
 
-        #if tree.event <= 18: continue
-        #if tree.event > 20: continue
-        #if tree.event != 10: continue
-        #if tree.event > 1: continue
-        #if tree.event > 10: continue
-        #if tree.event < 50: continue
-        #if tree.event > 100: continue
+        #if tree.event > 100: break
         #if tree.event > 8000: break
+        if ientry > 1000: break
 
-        #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
-        if tree.event % 100 == 0: print("Event: %i" % tree.event)
+        #if tree.event % 100 == 0: print("Event: %i" % tree.event)
+        if ientry % 100 == 0: print("Event: %i" % ientry)
 
         # check chip
         #if chip != "all":
         #    if tree.chip != chip: continue
-
-        #roll = [i for i in tree.roll]
-
-        '''
-        #for item in tree.roll: print item,
-        roll_np = np.array(tree.roll)
-        timest = np.array(range(13))
-        print
-        print roll_np, timest
-        while not(roll_np[11] == 1 and roll_np[12] == 1):
-            roll_np = np.roll(roll_np,1)
-            timest = np.roll(timest,1)
-            print roll_np, timest
-            #break
-        '''
-
-        # check sca is not in roll mode!
-        #if tree.roll[sca] == 1: continue
-        #if tree.roll[11] == 0: continue
-        #if tree.roll[12] == 0: continue
 
         # determine SCA
         for sca in range(13):
@@ -105,6 +80,7 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
                     #if val == 0: val = 4096
                     #elif val == 4: val = 0
 
+                    #if val > 0:
                     data[chan][var].append(val)
             else:
                 for chan in chans:
@@ -195,209 +171,7 @@ def subtractPedestal(chans_data):
 
     return all_chan_data
 
-def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
-    rt.gStyle.SetOptStat(0)
-
-    chans = all_chan_data.keys()
-    variabs = all_chan_data[chans[0]].keys()
-    nchans = chans[-1]
-
-    hists = []
-
-    if "ped" in cname: name = "pedestal"
-    elif "rms" in cname: name = "rms"
-    else: name = ""
-
-    for var in variabs:
-        hist = rt.TH1F("h_ped_"+var,name +" for "+var,nchans,0,nchans)
-
-        for chan in chans:
-
-            chan_data = all_chan_data[chan][var]
-
-            chan_ped = chan_data.mean()
-            chan_rms = chan_data.std()
-
-            #print var,chan,chan_ped,chan_rms
-            if chan_ped < 10: # means we are analyzing ped subtracted data
-                hist.SetBinContent(chan+1,min(5,chan_rms))
-            else:
-                hist.SetBinContent(chan+1,chan_ped)
-                hist.SetBinError(chan+1,chan_rms)
-
-            if chan_ped < 1 and chan_rms > 3:
-                print "## High RMS", var,chan,chan_rms
-
-        hists.append(hist)
-
-    canv = rt.TCanvas("canv_ped","canv",1000,500)
-    canv.Divide(len(hists),1,0.01,0.01)
-
-    for i,hist in enumerate(hists):
-        canv.cd(i+1)
-        hist.Draw("colz")
-
-    canv.Update()
-    canv.Draw()
-    rt.gStyle.SetOptStat(1)
-
-    #q = raw_input("continue?")
-
-    canv.SaveAs(cname+".pdf")
-    return canv
-
-def calcNoise(all_chan_data):
-
-    noise_data = {}
-    chans = all_chan_data.keys()
-    variabs = all_chan_data[chans[0]].keys()
-
-    for var in variabs:
-        noise_data[var + "_IN"] = []
-        noise_data[var + "_CN"] = []
-        noise_data[var + "_DS"] = []
-        noise_data[var + "_AS"] = []
-        noise_data[var + "_large_sumDS"] = []
-
-    for var in variabs:
-        # Loop over events (based on 0 channel)
-        for event in range(len(all_chan_data[chans[0]][var])):
-
-            sumAS = 0
-            sumDS = 0
-            n_valid_chans = 0
-
-            for i,chan in enumerate(chans):
-
-                val = all_chan_data[chan][var][event]
-
-                if val > -999: n_valid_chans += 1
-                else: continue
-
-                # direct sum
-                sumDS += val
-                # alternate sum
-                if i % 2 == 0: sumAS += val
-                else: sumAS -= val
-
-            # calc noise
-            #if n_valid_chans < 63: print(n_valid_chans)
-            inc_noise = sumAS / math.sqrt(n_valid_chans)
-            coh_noise = math.sqrt(abs(sumDS * sumDS - sumAS * sumAS)) / n_valid_chans
-
-            if abs(sumAS) > 1500:
-                print("Suspiciously large AS: %i in event %i" %(sumAS,event))
-                continue
-            if abs(sumDS) > 1500:
-                print("Suspiciously large DS: %i in event %i" %(sumDS,event))
-                continue
-
-            if sumDS > 150:
-                #print("SumDS: %f, event %i" % (sumDS, event))
-                noise_data[var + "_large_sumDS"].append(event)
-
-            noise_data[var + "_AS" ].append(sumAS)
-            noise_data[var + "_DS" ].append(sumDS)
-            noise_data[var + "_IN" ].append(inc_noise)
-            noise_data[var + "_CN" ].append(coh_noise)
-
-    # Convert lists to numpy arrays
-    for key,arr in noise_data.items(): noise_data[key] = np.array(noise_data[key])
-
-    return noise_data
-
-def plotNoise(noise_data, cname):
-
-    # make histograms
-    hists = []
-    #for key,values in noise_data.items():
-
-    #h_order = ["_DS","_AS"]#,"_IN","_CN"]#,"_CNF"]
-    h_order = ["_DS","_AS"]#,"_large_sumDS"]
-    variabs = ["lg","hg"]
-
-    #for key in sorted(data):
-    #for key in sorted(noise_data):
-    for var in variabs:
-        for htype in h_order:
-            key = var + htype
-
-            values = noise_data[key]
-            if len(values) == 0: values = np.array([0])
-            print key, values.mean(),values.std()
-
-            xmin = math.floor(values.min())-0.5
-            xmax = math.ceil(values.max())+0.5
-            nbins = int((xmax-xmin))/2
-            #nbins = min(100,len(values)/50)
-
-            hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
-            for val in values: hist.Fill(val)
-            #hist.Draw()
-            hists.append(hist)
-
-    canv = rt.TCanvas("canv_noise","canv",1000,800)
-    #canv.Divide(4,len(hists)/4,0.01,0.01)
-    canv.Divide(len(h_order),len(hists)/len(h_order),0.01,0.01)
-    for i, hist in enumerate(hists):
-        canv.cd(i+1)
-        hist.Draw("")
-
-    #canv.Draw()
-    canv.Update()
-
-    #q = raw_input("Continue?")
-    canv.SaveAs(cname+".pdf")
-
-    return canv
-
-def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
-    rt.gStyle.SetOptStat(0)
-    rt.gStyle.SetPadRightMargin(0.15)
-
-    chans = all_chan_data.keys()#[:3]
-    variabs = all_chan_data[chans[0]].keys()
-    nchans = chans[-1]
-
-    hists = {}
-    for var in variabs:
-        #hist = rt.TH2F("h_corr_"+var,"correlation for "+var,64,0,64,64,0,64)
-        hist = rt.TH2F("h_corr_"+var,"correlation for "+var,nchans,0,nchans,nchans,0,nchans)
-        rt.SetOwnership(hist,0)
-        hists["h_corr_"+var] = hist
-
-    # compute correlations and fill histos
-    for var in variabs:
-        data_matrix = np.array([all_chan_data[chan][var] for chan in chans])
-        corr_matr = np.corrcoef(data_matrix)
-
-        for chan1 in chans:
-            for chan2 in chans:
-                corr = abs(corr_matr[chan1][chan2])
-                if chan1 != chan2:
-                    hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
-
-                    #if corr > 3*corr_matr.mean() : print chan1, chan2, corr
-                    if corr > corr_matr.mean() + 3*corr_matr.std(): print "## Corr", var, chan1, chan2, corr
-
-    canv = rt.TCanvas("canv_noise","canv",1000,500)
-    canv.Divide(len(hists),1,0.01,0.01)
-
-    for i,hname in enumerate(hists):
-        hist = hists[hname]
-        canv.cd(i+1)
-        hist.Draw("colz")
-
-    canv.Update()
-    #canv.Draw()
-    rt.gStyle.SetOptStat(1)
-
-    #q = raw_input("continue?")
-
-    canv.SaveAs(cname+".pdf")
-    return canv
-
-def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt"):
+def plot_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt"):
     chans = all_chan_data.keys()#[:3]
     variabs = all_chan_data[chans[0]].keys()
     nchans = chans[-1]
@@ -416,46 +190,27 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
     rt.gROOT.LoadMacro("SingleLayer.C")
 
     for var in variabs:
-        print(var)
+        #print(var)
 
         for chan in chans:
 
             chan_data = all_chan_data[chan][var]
 
-            chan_ped = chan_data.mean()
-            #chan_ped = np.median(chan_data)
+            #chan_ped = chan_data.mean()
+            chan_ped = np.median(chan_data)
             chan_rms = chan_data.std()
 
             chip = chan/64
             real_chan = chan/4
 
-            #print chan, chip, real_chan
-
-            '''
-            if (chip,real_chan) in rms_data:
-                print "already in", chip, real_chan
-            else:
-                rms_data[(chip,real_chan)] = (chan_ped,chan_rms)
-            '''
             rms_data[chan] = (chan_ped,chan_rms)
 
-        #print rms_data
-        #print len(chans), len(rms_data)
 
         fout.write(var + "\n")
         for sens_chan in sens_map:
             (chip,chip_chan) = sens_map[sens_chan]
 
-            #print chip, chan
-            #print sens_chan, rms_data[chip][chan]
-            #if chip in rms_data:
-            #    if chan in rms_data:
-            #        print sens_chan, chip, chan
-            #if (chip,chip_chan) in rms_data:
-            #    print chip, chip_chan, rms_data[(chip,chip_chan)]
             glob_chan = chip * 64 + chip_chan
-            #print chip, chip_chan, rms_data[glob_chan]
-            #print("%.2f %.2f" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
             fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
 
         canv = rt.TCanvas("hexa_"+var,"hex",700,600)
@@ -525,7 +280,8 @@ if __name__ == "__main__":
     #sca = 6
     timesamp = 3
     nchans = 64
-    chan_select = "all"
+    #chan_select = "all"
+    chan_select = "even"
 
     outfile = rt.TFile(run_dir + "plots.root","recreate")
 
@@ -534,7 +290,7 @@ if __name__ == "__main__":
     #chips = [0,1,2,3,"all"]
 
     #for sca in range(1):
-    for timesamp in range(11):
+    for timesamp in range(2,4):
         for chip in chips:
             print(80*"#")
             print("Analyzing: chip %s, TS %i" %(str(chip),timesamp))
@@ -546,8 +302,7 @@ if __name__ == "__main__":
             if chip == "all":
                 #foutname = run_dir + "avg_rms_summary.txt"
                 suffix = "_timesamp_%s" %timesamp
-                #print_rms(raw_all_data, run_dir, suffix)
-                #print_rms(all_data, run_dir, suffix)
-                print_rms(all_data, run_dir, suffix)
+                plot_rms(raw_all_data, run_dir, suffix)
+                #plot_rms(all_data, run_dir, suffix)
 
     outfile.Close()
