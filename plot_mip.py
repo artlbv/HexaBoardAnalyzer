@@ -64,11 +64,15 @@ def getHist(tree,maxTS):
         #print mean
         '''
 
+    print hist
     return hist
 
 if __name__ == "__main__":
 
-    fname = "merge.root"
+    #fname = "/Users/artur/Work/LLR/HGCAL/Testbeam/data/may17/ele200/merge.root"
+    #fname = "/Users/artur/Work/LLR/HGCAL/Testbeam/data/may17/all_data/disk2_2TB/data/PED_RUN_0042_100517_1954.rootall.root"
+    #fname = "/Users/artur/Work/LLR/HGCAL/Testbeam/data/may17/all_data/disk2_2TB/data/merge_ele200plus.root"
+    #fname = "/Users/artur/Work/LLR/HGCAL/Testbeam/data/may17/all_data/disk2_2TB/data/merge_ele250.root"
 
     tfile = ROOT.TFile(fname)
 
