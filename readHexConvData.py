@@ -90,120 +90,119 @@ def createTree(fname):
 
     #skip_file = False
 
-    for fname in fnames:
-        fin = open(fname,"read")
-        print("Reading file %s"%fname)
-        for line in fin.readlines():#[:1000]:
+    fin = open(fname,"read")
+    print("Reading file %s"%fname)
+    for line in fin.readlines():#[:1000]:
 
-            if "Event" in line:
-                # check counter
-                if chan != 0:
-                    print("Channel number incorrect!!!!!")
-                    chan = 0
+        if "Event" in line:
+            # check counter
+            if chan != 0:
+                print("Channel number incorrect!!!!!")
+                chan = 0
 
-                    event = -99
-                    gain_type = "lg"
-                    chan = 0
-                    chip = -99
+                event = -99
+                gain_type = "lg"
+                chan = 0
+                chip = -99
 
-                    break
-                    #exit(0)
+                break
+                #exit(0)
 
-                # fill previous event/chip
-                if event >= 0 and chip == 3: tree.Fill()
-                #if event > 10: break
+            # fill previous event/chip
+            if event >= 0 and chip == 3: tree.Fill()
+            #if event > 10: break
 
-                header_items = line.split()
-                event = int(header_items[1])
-                chip = int(header_items[3])
+            header_items = line.split()
+            event = int(header_items[1])
+            chip = int(header_items[3])
 
-                # read and convert roll position
-                roll_bin = format(int(header_items[5],16), '#015b')
-                roll = array('i', [ int(roll_bin[i+2]) for i in range(nsca) ] )
+            # read and convert roll position
+            roll_bin = format(int(header_items[5],16), '#015b')
+            roll = array('i', [ int(roll_bin[i+2]) for i in range(nsca) ] )
 
-                # check rollmask has only two 1
-                if sum(roll) != 2 and chip == 0:
-                    print("Warning! In event %i the rollmask sum is %i" %(event, sum(roll)))
-                    print("Stopping!")
-                    break
+            # check rollmask has only two 1
+            if sum(roll) != 2 and chip == 0:
+                print("Warning! In event %i the rollmask sum is %i" %(event, sum(roll)))
+                print("Stopping!")
+                break
 
-                #if chip != 0: break
+            #if chip != 0: break
 
-                if chip == 1:
-                    if roll_b != roll:
-                        print "Rollmask mistmach between chips!:", event, roll_b, roll
+            if chip == 1:
+                if roll_b != roll:
+                    print "Rollmask mistmach between chips!:", event, roll_b, roll
 
-                # fill branches
-                event_b[0] = event
-                chip_b[0] = chip
-                for i in range(nsca): roll_b[i] = roll[i]
-                #print roll, roll_b
+            # fill branches
+            event_b[0] = event
+            chip_b[0] = chip
+            for i in range(nsca): roll_b[i] = roll[i]
+            #print roll, roll_b
 
-                # time pos
-                timepos = getTimePos(roll)
-                for i in range(nsca): ts_b[i] = timepos[i]
+            # time pos
+            timepos = getTimePos(roll)
+            for i in range(nsca): ts_b[i] = timepos[i]
 
-                if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
+            if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
 
-                # reset arrays
-                for k in [chip]:
-                    for j in range(nchans):
+            # reset arrays
+            for k in [chip]:
+                for j in range(nchans):
 
-                        tot_fast_b[k*nchans + j] = -99
-                        tot_slow_b[k*nchans + j] = -99
-                        toa_rise_b[k*nchans + j] = -99
-                        toa_fall_b[k*nchans + j] = -99
+                    tot_fast_b[k*nchans + j] = -99
+                    tot_slow_b[k*nchans + j] = -99
+                    toa_rise_b[k*nchans + j] = -99
+                    toa_fall_b[k*nchans + j] = -99
 
-                        for i in range(nsca):
+                    for i in range(nsca):
 
-                            hgain_b[k*nchans*nsca + i*nchans + j] = -99
-                            lgain_b[k*nchans*nsca + i*nchans + j] = -99
+                        hgain_b[k*nchans*nsca + i*nchans + j] = -99
+                        lgain_b[k*nchans*nsca + i*nchans + j] = -99
 
+        else:
+            # check line contains data (x nsca)
+            items = line.split()
+
+            #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
+            if (len(items) != 15):
+                if (len(items) != 13): continue
+            # check there was an event header before
+            if event == -99:
+                print("No event header before data line!");
+                continue
+
+            # read data
+            #print("Reading chan %i in %s" %(chan,gain_type) )
+            items = [int(item) for item in line.split()]
+
+            # convert over/undershoot
+            for i,item in enumerate(items):
+                if item == 0: items[i] = 4096
+                elif item == 4: items[i] = 0
+
+            # have to invert channel and sca number
+            if gain_type == "hg":
+                # fill charge
+                for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                # fill toa/tot
+                if (len(items) == 15):
+                    toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
+                    tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
+            elif gain_type == "lg":
+                # fill charge
+                for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                # fill tot/toa
+                if (len(items) == 15):
+                    toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
+                    tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
+
+
+            # switch counters
+            if chan == 63:
+                chan = 0
+                if gain_type == "lg": gain_type = "hg"
+                elif gain_type == "hg": gain_type = "lg"
             else:
-                # check line contains data (x nsca)
-                items = line.split()
-
-                #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
-                if (len(items) != 15):
-                    if (len(items) != 13): continue
-                # check there was an event header before
-                if event == -99:
-                    print("No event header before data line!");
-                    continue
-
-                # read data
-                #print("Reading chan %i in %s" %(chan,gain_type) )
-                items = [int(item) for item in line.split()]
-
-                # convert over/undershoot
-                for i,item in enumerate(items):
-                    if item == 0: items[i] = 4096
-                    elif item == 4: items[i] = 0
-
-                # have to invert channel and sca number
-                if gain_type == "hg":
-                    # fill charge
-                    for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
-                    # fill toa/tot
-                    if (len(items) == 15):
-                        toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
-                        tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
-                elif gain_type == "lg":
-                    # fill charge
-                    for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
-                    # fill tot/toa
-                    if (len(items) == 15):
-                        toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
-                        tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
-
-
-                # switch counters
-                if chan == 63:
-                    chan = 0
-                    if gain_type == "lg": gain_type = "hg"
-                    elif gain_type == "hg": gain_type = "lg"
-                else:
-                    chan += 1
+                chan += 1
 
     # fill last event
     tree.Fill()
@@ -237,4 +236,5 @@ if __name__ == "__main__":
 
     for fname in fnames:
         if "raw.txt" in fname: continue
+        print fname
         createTree(fname)
