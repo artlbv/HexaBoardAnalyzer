@@ -45,13 +45,11 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         # skip first event
         if tree.event < 1: continue
         #if tree.event > 1: continue
-        #if tree.event < 50: continue
-        #if tree.event > 100: continue
-        #if tree.event > 8000: break
-        #if tree.event > 900: break
+        if ientry > 100: break
 
         #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
-        if tree.event % 100 == 0: print("Event: %i" % tree.event)
+        #if tree.event % 100 == 0: print("Event: %i" % tree.event)
+        if ientry % 100 == 0: print("Event: %i" % ientry)
 
         # check chip
         #if chip != "all":
@@ -72,8 +70,8 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
                     chip_nb = chan/64
                     val = getattr(tree,var)[chip_nb*64*13 + isca*64 + (chan)%64 ]
 
-                    if val > 0:
-                        data[chan][var].append(val)
+                    #if val > 0:
+                    data[chan][var].append(val)
             else:
                 for chan in chans:
                     val = getattr(tree,var)[chip *64*13 + isca*64 + (chan) ]
