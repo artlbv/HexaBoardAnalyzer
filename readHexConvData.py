@@ -39,22 +39,8 @@ def getTimePos(roll):
 
     return timepos
 
-if __name__ == "__main__":
+def createTree(fname):
 
-
-    if len(sys.argv) > 1:
-        fname = sys.argv[1]
-        print '# Input files are', fname
-    else:
-        print "No input files given!"
-        #exit(0)
-
-        #fname = "/Users/artur/Dropbox/Work/LLR/HGCAL/SK2cms/hexaboard/fromDocDB/RUN_170317_0912.txt"
-        fname = "/Users/artur/Downloads/Hexaboard_data/RUN_290317_1109.txt"
-
-        print("Using " + fname)
-
-    fin = open(fname,"read")
     #foutname = fname.replace('.txt','_new.root')
     foutname = fname.replace('.txt','.root')
     print("Storing data in " + foutname)
@@ -102,98 +88,122 @@ if __name__ == "__main__":
     chan = 0
     chip = -99
 
-    print("Reading file")
-    for line in fin.readlines():#[:1000]:
+    #skip_file = False
 
-        if "Event" in line:
-            # check counter
-            if chan != 0: print("Channel number incorrect!!!!!")
+    for fname in fnames:
+        fin = open(fname,"read")
+        print("Reading file %s"%fname)
+        for line in fin.readlines():#[:1000]:
 
-            # fill previous event/chip
-            if event >= 0 and chip == 3: tree.Fill()
-            #if event > 10: break
+            if "Event" in line:
+                # check counter
+                if chan != 0:
+                    print("Channel number incorrect!!!!!")
+                    chan = 0
 
-            header_items = line.split()
-            event = int(header_items[1])
-            chip = int(header_items[3])
+                    event = -99
+                    gain_type = "lg"
+                    chan = 0
+                    chip = -99
 
-            # read and convert roll position
-            roll_bin = format(int(header_items[5],16), '#015b')
-            roll = array('i', [ int(roll_bin[i+2]) for i in range(nsca) ] )
+                    break
+                    #exit(0)
 
-            #if chip != 0: break
+                # fill previous event/chip
+                if event >= 0 and chip == 3: tree.Fill()
+                #if event > 10: break
 
-            # fill branches
-            event_b[0] = event
-            chip_b[0] = chip
-            for i in range(nsca): roll_b[i] = roll[i]
-            #print roll, roll_b
+                header_items = line.split()
+                event = int(header_items[1])
+                chip = int(header_items[3])
 
-            # time pos
-            timepos = getTimePos(roll)
-            for i in range(nsca): ts_b[i] = timepos[i]
+                # read and convert roll position
+                roll_bin = format(int(header_items[5],16), '#015b')
+                roll = array('i', [ int(roll_bin[i+2]) for i in range(nsca) ] )
 
-            if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
+                # check rollmask has only two 1
+                if sum(roll) != 2 and chip == 0:
+                    print("Warning! In event %i the rollmask sum is %i" %(event, sum(roll)))
+                    print("Stopping!")
+                    break
 
-            # reset arrays
-            for k in [chip]:
-                for j in range(nchans):
+                #if chip != 0: break
 
-                    tot_fast_b[k*nchans + j] = -99
-                    tot_slow_b[k*nchans + j] = -99
-                    toa_rise_b[k*nchans + j] = -99
-                    toa_fall_b[k*nchans + j] = -99
+                if chip == 1:
+                    if roll_b != roll:
+                        print "Rollmask mistmach between chips!:", event, roll_b, roll
 
-                    for i in range(nsca):
+                # fill branches
+                event_b[0] = event
+                chip_b[0] = chip
+                for i in range(nsca): roll_b[i] = roll[i]
+                #print roll, roll_b
 
-                        hgain_b[k*nchans*nsca + i*nchans + j] = -99
-                        lgain_b[k*nchans*nsca + i*nchans + j] = -99
+                # time pos
+                timepos = getTimePos(roll)
+                for i in range(nsca): ts_b[i] = timepos[i]
 
-        else:
-            # check line contains data (x nsca)
-            items = line.split()
+                if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
 
-            #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
-            if (len(items) != 15):
-                if (len(items) != 13): continue
-            # check there was an event header before
-            if event == -99:
-                print("No event header before data line!");
-                continue
+                # reset arrays
+                for k in [chip]:
+                    for j in range(nchans):
 
-            # read data
-            #print("Reading chan %i in %s" %(chan,gain_type) )
-            items = [int(item) for item in line.split()]
+                        tot_fast_b[k*nchans + j] = -99
+                        tot_slow_b[k*nchans + j] = -99
+                        toa_rise_b[k*nchans + j] = -99
+                        toa_fall_b[k*nchans + j] = -99
 
-            # convert over/undershoot
-            for i,item in enumerate(items):
-                if item == 0: items[i] = 4096
-                elif item == 4: items[i] = 0
+                        for i in range(nsca):
 
-            # have to invert channel and sca number
-            if gain_type == "hg":
-                # fill charge
-                for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
-                # fill toa/tot
-                if (len(items) == 15):
-                    toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
-                    tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
-            elif gain_type == "lg":
-                # fill charge
-                for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
-                # fill tot/toa
-                if (len(items) == 15):
-                    toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
-                    tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
+                            hgain_b[k*nchans*nsca + i*nchans + j] = -99
+                            lgain_b[k*nchans*nsca + i*nchans + j] = -99
 
-
-            # switch counters
-            if chan == 63:
-                chan = 0
-                if gain_type == "lg": gain_type = "hg"
-                elif gain_type == "hg": gain_type = "lg"
             else:
-                chan += 1
+                # check line contains data (x nsca)
+                items = line.split()
+
+                #if (len(items) != nsca) or (len(items) != (nsca + 2)): continue
+                if (len(items) != 15):
+                    if (len(items) != 13): continue
+                # check there was an event header before
+                if event == -99:
+                    print("No event header before data line!");
+                    continue
+
+                # read data
+                #print("Reading chan %i in %s" %(chan,gain_type) )
+                items = [int(item) for item in line.split()]
+
+                # convert over/undershoot
+                for i,item in enumerate(items):
+                    if item == 0: items[i] = 4096
+                    elif item == 4: items[i] = 0
+
+                # have to invert channel and sca number
+                if gain_type == "hg":
+                    # fill charge
+                    for i in range(nsca): hgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                    # fill toa/tot
+                    if (len(items) == 15):
+                        toa_fall_b[chip * nchans + nchans-1-chan] = items[13]
+                        tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
+                elif gain_type == "lg":
+                    # fill charge
+                    for i in range(nsca): lgain_b[chip * nchans*nsca + i*nchans + nchans-1-chan] = int(items[nsca-1-i])
+                    # fill tot/toa
+                    if (len(items) == 15):
+                        toa_rise_b[chip * nchans + nchans-1-chan] = items[13]
+                        tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
+
+
+                # switch counters
+                if chan == 63:
+                    chan = 0
+                    if gain_type == "lg": gain_type = "hg"
+                    elif gain_type == "hg": gain_type = "lg"
+                else:
+                    chan += 1
 
     # fill last event
     tree.Fill()
@@ -203,3 +213,28 @@ if __name__ == "__main__":
     tree.Print()
 
     fout.Close()
+
+
+if __name__ == "__main__":
+
+
+    if len(sys.argv) == 2:
+        fnames = sys.argv[1:]
+        #fname = fnames[0]
+        print '# Input file is', fnames[0]
+    elif len(sys.argv) > 2:
+        fnames = sys.argv[1:]
+        #fname = fnames[0] + "all.txt"
+        print("#input file %i"%len(fnames))
+    else:
+        print("No input files given!")
+        #exit(0)
+
+        #fname = "/Users/artur/Dropbox/Work/LLR/HGCAL/SK2cms/hexaboard/fromDocDB/RUN_170317_0912.txt"
+        fnames = ["/Users/artur/Downloads/Hexaboard_data/RUN_290317_1109.txt"]
+
+        print("Using " + fname[0])
+
+    for fname in fnames:
+        if "raw.txt" in fname: continue
+        createTree(fname)
