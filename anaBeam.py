@@ -143,11 +143,22 @@ def subtractPedestal(chans_data):
     all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
 
     print("Subtracting pedestals...")
-    for chan in chans:
-        chan_data = chans_data[chan]
 
+    #for chan in chans:
+    #    chan_data = chans_data[chan]
         # Pedestal subtraction
-        for var,values in chan_data.items():
+        #for var,values in chan_data.items():
+
+    # calc global pedestal
+    for var in variabs:
+        all_val = np.array([chans_data[chan][var] for chan in chans]).T
+
+        # per event pedestals
+        glob_peds = [np.median(event) for event in all_val]
+        #print glob_peds
+
+        values = chans_data[chan][var]
+        for chan in chans:
             #chan_ped = values.mean()
             chan_ped = np.median(values)
             chan_ped_std = values.std()
@@ -161,7 +172,8 @@ def subtractPedestal(chans_data):
                 all_chan_data[chan][var] = np.subtract(values,10000)
             else:
                 # subtract pedestal from values
-                all_chan_data[chan][var] = np.subtract(values,chan_ped)
+                all_chan_data[chan][var] = np.subtract(values,glob_peds)
+                #all_chan_data[chan][var] = np.subtract(values,chan_ped)
                 #all_chan_data[chan][var] = np.subtract(values,200)
                 #all_chan_data[chan][var] = values
                 #if chan < 2:
@@ -290,7 +302,8 @@ if __name__ == "__main__":
     #chips = [0,1,2,3,"all"]
 
     #for sca in range(1):
-    for timesamp in range(2,4):
+    #for timesamp in range(2,4):
+    for timesamp in range(8):
         for chip in chips:
             print(80*"#")
             print("Analyzing: chip %s, TS %i" %(str(chip),timesamp))
