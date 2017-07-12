@@ -8,7 +8,7 @@ print("Loading ROOT")
 import ROOT as rt
 
 # global variables
-nchips = 4
+nchips = 20
 nchans = 64
 nsca = 13
 
@@ -76,12 +76,12 @@ def createTree(fname):
     tree.Branch( 'chip', chip_b, 'chip/I' )
     tree.Branch( 'roll', roll_b, 'roll[13]/I' )
     tree.Branch( 'timesamp', ts_b, 'timesamp[13]/I' )
-    tree.Branch( 'hg', hgain_b, 'hg[4][13][64]/I' )
-    tree.Branch( 'lg', lgain_b, 'lg[4][13][64]/I' )
-    tree.Branch( 'tot_fast', tot_fast_b, 'tot_fast[4][64]/I' )
-    tree.Branch( 'tot_slow', tot_slow_b, 'tot_slow[4][64]/I' )
-    tree.Branch( 'toa_rise', toa_rise_b, 'toa_rise[4][64]/I' )
-    tree.Branch( 'toa_fall', toa_fall_b, 'toa_fall[4][64]/I' )
+    tree.Branch( 'hg', hgain_b, 'hg[' + str(nchips) + '][13][64]/I' )
+    tree.Branch( 'lg', lgain_b, 'lg[' + str(nchips) + '][13][64]/I' )
+    tree.Branch( 'tot_fast', tot_fast_b, 'tot_fast[' + str(nchips) + '][64]/I' )
+    tree.Branch( 'tot_slow', tot_slow_b, 'tot_slow[' + str(nchips) + '][64]/I' )
+    tree.Branch( 'toa_rise', toa_rise_b, 'toa_rise[' + str(nchips) + '][64]/I' )
+    tree.Branch( 'toa_fall', toa_fall_b, 'toa_fall[' + str(nchips) + '][64]/I' )
 
     event = -99
     gain_type = "lg"
@@ -109,7 +109,7 @@ def createTree(fname):
                 #exit(0)
 
             # fill previous event/chip
-            if event >= 0 and chip == 3: tree.Fill()
+            if event >= 0 and chip == nchips-1: tree.Fill()
             #if event > 10: break
 
             header_items = line.split()
@@ -126,11 +126,11 @@ def createTree(fname):
                 print("Stopping!")
                 break
 
-            #if chip != 0: break
-
-            if chip == 1:
+            '''
+            if chip > 0:
                 if roll_b != roll:
                     print "Rollmask mistmach between chips!:", event, roll_b, roll
+            '''
 
             # fill branches
             event_b[0] = event
