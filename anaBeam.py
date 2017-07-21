@@ -43,7 +43,7 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
 
     for ientry, entry in enumerate(tree):
         # skip first event
-        if tree.event < 0: continue
+        if tree.event < 1: continue
 
         #if tree.event > 100: break
         #if tree.event > 8000: break
@@ -52,13 +52,14 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
         #if tree.event % 100 == 0: print("Event: %i" % tree.event)
         if ientry % 100 == 0: print("Event: %i" % ientry)
 
+        #if entry.sum_lg[0] > 400000: continue
         # check chip
         #if chip != "all":
         #    if tree.chip != chip: continue
 
         # determine SCA
         for sca in range(13):
-            if tree.timesamp[sca] == timesamp: break
+            if tree.timesamp[12*13 + sca] == timesamp: break
 
         #print "HEHEHE", tree.event
 
@@ -69,9 +70,10 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
             if ("tot" in var) or ("toa" in var): isca = 0
             else: isca = sca
 
+            chip_offset = 2*4
             if chip == "all":
                 for chan in chans:#[:len(chans)/4]:#range(64):
-                    chip_nb = chan/64
+                    chip_nb = chan/64 + chip_offset
                     if ("tot" in var) or ("toa" in var):
                         val = getattr(tree,var)[chip_nb*64 + (chan)%64 ]
                     else:
@@ -161,6 +163,7 @@ def subtractPedestal(chans_data):
         for chan in chans:
             #chan_ped = values.mean()
             chan_ped = np.median(values)
+            #chan_ped = np.mean(values)
             chan_ped_std = values.std()
 
             #if "hg" in var: print chan, chan_ped, chan_ped_std
@@ -209,7 +212,15 @@ def plot_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt
             chan_data = all_chan_data[chan][var]
 
             #chan_ped = chan_data.mean()
-            chan_ped = np.median(chan_data)
+            #chan_ped = np.median(chan_data)
+            #datas = [data for data in chan_data if data > 0]
+            datas = chan_data
+            if len(datas) > 0:
+                chan_ped = np.mean(datas)
+            else:
+                chan_ped = 0#2222
+                #chan_ped = np.mean([0]+[data for data in chan_data if data > 0])
+            #chan_ped = sum(chan_data > np.mean(chan_data)+100)
             chan_rms = chan_data.std()
 
             chip = chan/64
@@ -302,8 +313,8 @@ if __name__ == "__main__":
     #chips = [0,1,2,3,"all"]
 
     #for sca in range(1):
-    #for timesamp in range(2,4):
-    for timesamp in range(8):
+    for timesamp in range(0,8):
+    #for timesamp in range(8):
         for chip in chips:
             print(80*"#")
             print("Analyzing: chip %s, TS %i" %(str(chip),timesamp))

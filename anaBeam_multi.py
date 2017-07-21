@@ -49,9 +49,9 @@ def getChansData(tree, chip = 0, chans = [0], timesamp = 3, variabs = []):
         # skip first event
         if tree.event < 1: continue
 
-        #if tree.event > 100: break
+        #if tree.event > 10: break
         #if tree.event > 8000: break
-        if ientry > 1000: break
+        #if ientry > 1000: break
 
         #if tree.event % 100 == 0: print("Event: %i" % tree.event)
         if ientry % 100 == 0: print("Event: %i" % ientry)
@@ -118,6 +118,7 @@ def readTree(fname, chip = 0, timesamp = 3, nchans = 64, chan_select = "all"):
 
     #variabs = ["charge_lowGain","charge_hiGain"]
     variabs = ["lg","hg","toa_rise","tot_fast"]
+    #variabs = ["lg"]
 
     if chip == "all": nchans *= 4
     # create channel list
@@ -144,6 +145,8 @@ def subtractPedestal(chans_data):
 
     chans = chans_data.keys()
     variabs = chans_data[chans[0]].keys()
+    #print chans_data[0]
+    #print chans_data[2]
 
     all_chan_data = { chan:{var:[] for var in variabs} for chan in chans}
 
@@ -159,11 +162,12 @@ def subtractPedestal(chans_data):
         all_val = np.array([chans_data[chan][var] for chan in chans]).T
 
         # per event pedestals
+        #glob_peds = [np.mean(event) for event in all_val]
         glob_peds = [np.median(event) for event in all_val]
         #print glob_peds
 
-        values = chans_data[chan][var]
         for chan in chans:
+            values = chans_data[chan][var]
             #chan_ped = values.mean()
             chan_ped = np.median(values)
             #chan_ped = np.mean(values)
@@ -178,11 +182,12 @@ def subtractPedestal(chans_data):
                 all_chan_data[chan][var] = np.subtract(values,10000)
             else:
                 # subtract pedestal from values
-                all_chan_data[chan][var] = np.subtract(values,glob_peds)
+                #all_chan_data[chan][var] = np.subtract(values,glob_peds)
                 #all_chan_data[chan][var] = np.subtract(values,chan_ped)
                 #all_chan_data[chan][var] = np.subtract(values,200)
-                #all_chan_data[chan][var] = values
-                #if chan < 2:
+                all_chan_data[chan][var] = values
+                #print values
+                ##if chan < 2:
                 #    print all_chan_data[chan][var]
 
     print("...done")
@@ -213,11 +218,12 @@ def plot_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt
         for chan in chans:
 
             chan_data = all_chan_data[chan][var]
+            #print chan_data
 
             #chan_ped = chan_data.mean()
             #chan_ped = np.median(chan_data)
-            datas = [data for data in chan_data if data > 0]
-            #datas = chan_data
+            #datas = [data for data in chan_data if data > 0]
+            datas = chan_data
             if len(datas) > 0:
                 chan_ped = np.mean(datas)
             else:
@@ -240,9 +246,9 @@ def plot_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt
             glob_chan = chip * 64 + chip_chan
             fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
 
-        #canv = rt.TCanvas("hexa_"+var,"hex",700,600)
-        canv = rt.TCanvas("hexa_"+var,"hex",1200,600)
-        canv.Divide(2,1)
+        canv = rt.TCanvas("hexa_"+var,"hex",700,600)
+        #canv = rt.TCanvas("hexa_"+var,"hex",1200,600)
+        #canv.Divide(2,1)
         rt.gStyle.SetOptStat(0)
 
         # Plot values in Hexagon
@@ -260,10 +266,10 @@ def plot_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt
             hHex_ped.SetBinContent(hex_cell+1, int(rms_data[glob_chan][0]))
             hHex_rms.SetBinContent(hex_cell+1, round(rms_data[glob_chan][1],2))
 
-        canv.cd(1)
+        #canv.cd(1)
         hHex_ped.Draw("colz text")
-        canv.cd(2)
-        hHex_rms.Draw("colz text")
+        #canv.cd(2)
+        #hHex_rms.Draw("colz text")
         canv.Update()
 
         canv.SaveAs(outdir+ canv.GetName()+suffix+".pdf")
@@ -318,7 +324,7 @@ if __name__ == "__main__":
     #chips = [0,1,2,3,"all"]
 
     #for sca in range(1):
-    for timesamp in range(7,8):
+    for timesamp in range(0,8):
     #for timesamp in range(8):
         for chip in chips:
             print(80*"#")
@@ -327,11 +333,15 @@ if __name__ == "__main__":
             raw_all_data = readTree(fname, chip, timesamp, nchans, chan_select)
             all_data = subtractPedestal(raw_all_data)
 
+            #print raw_all_data
+            #print all_data
+            #exit(0)
+
             #print all_data
             if chip == "all":
                 #foutname = run_dir + "avg_rms_summary.txt"
                 suffix = "_timesamp_%s" %timesamp
-                plot_rms(raw_all_data, run_dir, suffix)
-                #plot_rms(all_data, run_dir, suffix)
+                #plot_rms(raw_all_data, run_dir, suffix)
+                plot_rms(all_data, run_dir, suffix)
 
     outfile.Close()
