@@ -8,7 +8,7 @@ print("Loading ROOT")
 import ROOT as rt
 
 # global variables
-nchips = 4*5
+nchips = 4*4
 nchans = 64
 nsca = 13
 
@@ -70,8 +70,12 @@ def createTree(fname):
     toa_rise_b = array('i', nchips * nchans * [ -99 ])
     toa_fall_b = array('i', nchips * nchans * [ -99 ])
     ## sums
-    sum_lg_b = array('i', nchips * [-99])
-    sum_hg_b = array('i', nchips * [-99])
+    sum_lg_b = array('i', nchips * [0])
+    sum_hg_b = array('i', nchips * [0])
+    nhits_toa_b = array('i', nchips * [0])
+    nhits_tot_b = array('i', nchips * [0])
+    nhits_toa_all_b = array('i', [0])
+    nhits_tot_all_b = array('i', [0])
 
     # tree branches
     ## sk2cms data
@@ -88,7 +92,11 @@ def createTree(fname):
 
     ## sums
     tree.Branch( 'sum_lg', sum_lg_b, 'sum_lg[' + str(nchips) + ']/I' )
-    tree.Branch( 'sum_hg', sum_lg_b, 'sum_lg[' + str(nchips) + ']/I' )
+    tree.Branch( 'sum_hg', sum_hg_b, 'sum_hg[' + str(nchips) + ']/I' )
+    tree.Branch( 'nhits_toa', nhits_toa_b, 'nhits_toa[' + str(nchips) + ']/I' )
+    tree.Branch( 'nhits_tot', nhits_tot_b, 'nhits_tot[' + str(nchips) + ']/I' )
+    tree.Branch( 'nhits_toa_all', nhits_toa_all_b, 'nhits_toa_all/I' )
+    tree.Branch( 'nhits_tot_all', nhits_tot_all_b, 'nhits_tot_all/I' )
 
     event = -99
     gain_type = "lg"
@@ -116,13 +124,20 @@ def createTree(fname):
                 #exit(0)
 
             # fill previous event/chip  ## Reset counters
-            if event >= 0 and chip == nchips-1:
-                tree.Fill()
-                for i in range(nchips):
-                    sum_lg_b[i] = 0
-                    sum_hg_b[i] = 0
+            if event > 0 and chip == nchips-1:
+                #calc toa/tot tot hits
+                nhits_toa_all_b[0] = int(sum(nhits_toa_b))
+                nhits_tot_all_b[0] = int(sum(nhits_tot_b))
+                #print nhits_toa_b, nhits_tot_b
+                #print nhits_toa_all_b, nhits_tot_all_b
 
-            #if event > 10: break
+                tree.Fill()
+
+                #nhits_toa_all_b = 0
+                #nhits_tot_all_b = 0
+                #print nhits_toa_b, nhits_tot_b
+
+            #if event > 100: break
 
             header_items = line.split()
             event = int(header_items[1])
@@ -160,19 +175,25 @@ def createTree(fname):
                 if timepos[i] == 3: sca_in_ts3 = i
                 if timepos[i] == 0: sca_in_ts0 = i
 
-            if (chip == 0) and (event % 500 == 0): print("Event %i, chip %i" % (event, chip))
+            #if (chip == 0) and (event % 100 == 0): print("Event %i, chip %i" % (event, chip))
+            if (chip == 0) and (event % 100 == 0): print("Event %i" % (event))
 
+            #print sum_lg_b
+            #print nhits_toa_b, nhits_tot_b
             # reset arrays
             for k in [chip]:
-                for j in range(nchans):
+                sum_lg_b[k] = 0
+                sum_hg_b[k] = 0
+                nhits_toa_b[k] = 0
+                nhits_tot_b[k] = 0
 
+                for j in range(nchans):
                     tot_fast_b[k*nchans + j] = -99
                     tot_slow_b[k*nchans + j] = -99
                     toa_rise_b[k*nchans + j] = -99
                     toa_fall_b[k*nchans + j] = -99
 
                     for i in range(nsca):
-
                         hgain_b[k*nchans*nsca + i*nchans + j] = -99
                         lgain_b[k*nchans*nsca + i*nchans + j] = -99
 
@@ -207,7 +228,9 @@ def createTree(fname):
                     tot_slow_b[chip * nchans + nchans-1-chan] = items[14]
 
                 #sum_hg_b[chip] += sum(items)
-                if chan %2 == 0: sum_hg_b[chip] += items[nsca-1-sca_in_ts3] - items[nsca-1-sca_in_ts0]
+                if chan %2 == 1:
+                    #sum_hg_b[chip] += items[nsca-1-sca_in_ts3] - items[nsca-1-sca_in_ts0]
+                    sum_hg_b[chip] += max(items)
 
             elif gain_type == "lg":
                 # fill charge
@@ -218,8 +241,12 @@ def createTree(fname):
                     tot_fast_b[chip * nchans + nchans-1-chan] = items[14]
 
                 #sum_lg_b[chip] += sum(items)
-                if chan %2 == 0: sum_lg_b[chip] += items[nsca-1-sca_in_ts3] - items[nsca-1-sca_in_ts0]
-
+                if chan %2 == 1:
+                    #sum_lg_b[chip] += items[nsca-1-sca_in_ts3] - items[nsca-1-sca_in_ts0]
+                    sum_lg_b[chip] += max(items)
+                    if items[13] > 5: nhits_toa_b[chip] += 1
+                    if items[14] > 5: nhits_tot_b[chip] += 1
+                    #nhits_toa_b[chip] += 1
 
             # switch counters
             if chan == 63:
