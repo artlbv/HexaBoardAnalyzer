@@ -8,7 +8,7 @@ print("Loading ROOT")
 import ROOT as rt
 
 # global variables
-nchips = 20
+nchips = 4
 nchans = 64
 nsca = 13
 
@@ -40,6 +40,10 @@ def getTimePos(roll):
     return timepos
 
 def createTree(fname):
+
+    print(80*"#")
+    print(80*"#")
+    print("Creating ROOT tree from txt file")
 
     #foutname = fname.replace('.txt','_new.root')
     foutname = fname.replace('.txt','.root')
@@ -109,7 +113,7 @@ def createTree(fname):
                 #exit(0)
 
             # fill previous event/chip
-            if event >= 0 and chip == nchips-1: tree.Fill()
+            if event > 0 and chip == nchips-1: tree.Fill()
             #if event > 10: break
 
             header_items = line.split()
@@ -126,6 +130,7 @@ def createTree(fname):
                 print("Stopping!")
                 break
 
+            if chip > 3: continue
             '''
             if chip > 0:
                 if roll_b != roll:
@@ -206,13 +211,14 @@ def createTree(fname):
 
     # fill last event
     tree.Fill()
-    print("Tree filled")
+    print("Tree filled with %i events" %tree.GetEntries() )
 
     tree.Write()
-    tree.Print()
+    #tree.Print()
 
     fout.Close()
 
+    return foutname
 
 if __name__ == "__main__":
 

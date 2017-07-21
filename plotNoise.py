@@ -45,18 +45,18 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         # skip first event
         if tree.event < 1: continue
         #if tree.event > 1: continue
-        if ientry > 100: break
+        #if ientry > 100: break
 
         #if tree.event % 1000 == 0 and tree.chip == 0: print("Event: %i" % tree.event)
         #if tree.event % 100 == 0: print("Event: %i" % tree.event)
         if ientry % 100 == 0: print("Event: %i" % ientry)
 
-        # check chip
-        #if chip != "all":
-        #    if tree.chip != chip: continue
+        # filter sca by time sample (before trigger)
+        if tree.timesamp[sca] > 9: continue
 
-        # check sca is not in roll mode!
-        if tree.roll[sca] == 1: continue
+        ## filter TOA mishits
+        #n_toa = sum([1 for toa in tree.toa_rise if toa > 0])
+        #if n_toa > 10: continue
 
         #if ientry % 1000 == 0: print(ientry)
         for var in variabs:
@@ -68,10 +68,15 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
             if chip == "all":
                 for chan in chans:#[:len(chans)/4]:#range(64):
                     chip_nb = chan/64
-                    val = getattr(tree,var)[chip_nb*64*13 + isca*64 + (chan)%64 ]
+                    if ("tot" in var) or ("toa" in var):
+                        val = getattr(tree,var)[chip_nb*64 + (chan)%64 ]
+                    else:
+                        val = getattr(tree,var)[chip_nb*64*13 + isca*64 + (chan)%64 ]
 
                     #if val > 0:
                     data[chan][var].append(val)
+                    #if val < 100:
+                    #    print ientry, chan, val
             else:
                 for chan in chans:
                     val = getattr(tree,var)[chip *64*13 + isca*64 + (chan) ]
@@ -100,6 +105,7 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
 
     #variabs = ["charge_lowGain","charge_hiGain"]
     variabs = ["lg","hg"]
+    #variabs = ["toa_rise","tot_fast"]
 
     if chip == "all": nchans *= 4
     # create channel list
@@ -111,8 +117,8 @@ def readTree(fname, chip = 0, sca = 0, nchans = 64, chan_select = "all"):
         chans = range(1,nchans,2)
     else:
         chans = range(nchans)
-    print("Going to analyze these channels:")
-    print(chans)
+    print("Going to analyze these " + chan_select + " channels" )
+    #print(chans)
 
     # read in all channels' data
     print("Reading chan data")
@@ -178,12 +184,14 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
 
             chan_data = all_chan_data[chan][var]
 
-            chan_ped = chan_data.mean()
+            #chan_ped = chan_data.mean()
+            chan_ped = np.median(chan_data)
             chan_rms = chan_data.std()
 
             #print var,chan,chan_ped,chan_rms
             if chan_ped < 10: # means we are analyzing ped subtracted data
-                hist.SetBinContent(chan+1,min(5,chan_rms))
+                #hist.SetBinContent(chan+1,min(50,chan_rms))
+                hist.SetBinContent(chan+1,chan_rms)
             else:
                 hist.SetBinContent(chan+1,chan_ped)
                 hist.SetBinError(chan+1,chan_rms)
@@ -288,7 +296,7 @@ def plotNoise(noise_data, cname):
 
             values = noise_data[key]
             if len(values) == 0: values = np.array([0])
-            print key, values.mean(),values.std()
+            #print key, values.mean(),values.std()
 
             xmin = math.floor(values.min())-0.5
             xmax = math.ceil(values.max())+0.5
@@ -300,7 +308,7 @@ def plotNoise(noise_data, cname):
             #hist.Draw()
             hists.append(hist)
 
-    canv = rt.TCanvas("canv_noise","canv",1000,800)
+    canv = rt.TCanvas(cname,cname,1000,800)
     #canv.Divide(4,len(hists)/4,0.01,0.01)
     canv.Divide(len(h_order),len(hists)/len(h_order),0.01,0.01)
     for i, hist in enumerate(hists):
@@ -335,14 +343,16 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
         data_matrix = np.array([all_chan_data[chan][var] for chan in chans])
         corr_matr = np.corrcoef(data_matrix)
 
-        for chan1 in chans:
-            for chan2 in chans:
-                corr = abs(corr_matr[chan1][chan2])
+        for i1,chan1 in enumerate(chans):
+            for i2,chan2 in enumerate(chans):
+                corr = abs(corr_matr[i1][i2])
                 if chan1 != chan2:
                     hists["h_corr_"+var].SetBinContent(chan1+1,chan2+1,corr)
 
                     #if corr > 3*corr_matr.mean() : print chan1, chan2, corr
                     #if corr > corr_matr.mean() + 3*corr_matr.std(): print "## Corr", var, chan1, chan2, corr
+                    if chan1 < 256 and chan2 > 256:
+                        if corr > 0.9: print "## Corr", var, chan1, chan2, corr
 
     canv = rt.TCanvas("canv_noise","canv",1000,500)
     canv.Divide(len(hists),1,0.01,0.01)
@@ -371,7 +381,7 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
     rms_data = {}
 
     #print chans
-    foutname = outdir + "avg_rms_summary" + suffix + ".txt"
+    foutname = outdir + "rms_summary" + suffix + ".txt"
     fout = open(foutname,"w")
 
     #for var in ['hg']:#variabs:
@@ -388,6 +398,7 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
             chan_ped = chan_data.mean()
             chan_rms = chan_data.std()
+            #print chan_data
 
             chip = chan/64
             real_chan = chan/4
@@ -405,7 +416,11 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
         #print rms_data
         #print len(chans), len(rms_data)
 
-        fout.write(var + "\n")
+        #fout.write(var + "\n")
+        if "hg" in var:
+            fout.write(var + "\n")
+            fout.write("Chip Chan\tRMS\n")
+
         for sens_chan in sens_map:
             (chip,chip_chan) = sens_map[sens_chan]
 
@@ -419,7 +434,7 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
             glob_chan = chip * 64 + chip_chan
             #print chip, chip_chan, rms_data[glob_chan]
             #print("%.2f %.2f" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
-            fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
+            #fout.write("%.2f %.2f\n" %(rms_data[glob_chan][0], rms_data[glob_chan][1]))
 
         canv = rt.TCanvas("hexa_"+var,"hex",1300,600)
         canv.Divide(2,1)
@@ -438,11 +453,20 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
             #print hex_cell, sens_chan, glob_chan
             hHex_ped.SetBinContent(hex_cell+1, int(rms_data[glob_chan][0]))
             hHex_rms.SetBinContent(hex_cell+1, round(rms_data[glob_chan][1],2))
+            #hHex_rms.SetBinContent(hex_cell+1, sens_chan)
+
+        if 'hg' in var:
+
+            for chan in sorted(rms_data.keys(), key = lambda x:rms_data[x][1], reverse=True):
+                #print chan,
+                #print("%i\t%i\t%0.2f" %(chan/64,chan%64,rms_data[chan][1]))
+                fout.write("%i %i\t%0.2f\n" %(chan/64,chan%64,rms_data[chan][1]))
 
         canv.cd(1)
         hHex_ped.Draw("colz text")
         canv.cd(2)
         hHex_rms.Draw("colz text")
+        #rt.gPad.SetLogz()
         canv.Update()
 
         canv.SaveAs(outdir+ canv.GetName()+suffix+".pdf")
@@ -454,26 +478,11 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
     return 1
 
-if __name__ == "__main__":
+def runPlotNoise(fname):
 
-
-    '''
-    if '-b' in sys.argv:
-        sys.argv.remove('-b')
-        _batchMode = True
-    '''
-
-    if len(sys.argv) > 1:
-        fname = sys.argv[1]
-        print '# Input files are', fname
-    else:
-        print "No input files given!"
-        #exit(0)
-
-        fname = "sk2cms_tree.root"
-
-        print("Using " + fname)
-
+    print(80*"#")
+    print(80*"#")
+    print("Analyzing hexaboard noise")
 
     fname = fname.replace(".txt",".root")
     #fnames = glob.glob(fname)
@@ -494,7 +503,11 @@ if __name__ == "__main__":
     chips = ["all"]
     #chips = [0,1,2,3,"all"]
 
-    for sca in [0]:#range(13):
+    #for sca in [0]:#range(13):
+    #for sca in range(13):
+    scas = range(13)#[0]
+    scas = [0]
+    for sca in scas:
         for chip in chips:
             print(80*"#")
             print("Analyzing: chip %s, sca %i" %(str(chip),sca))
@@ -510,7 +523,7 @@ if __name__ == "__main__":
             #continue
 
             cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-            canv = calcCorr(all_data, cname)
+            canv = calcCorr(raw_all_data, cname)
             outfile.cd()
             canv.Write()
 
@@ -524,6 +537,17 @@ if __name__ == "__main__":
                 #foutname = run_dir + "avg_rms_summary.txt"
                 suffix = "_sca_%s" %sca
                 #print_rms(raw_all_data, run_dir, suffix)
-                print_rms(all_data, run_dir, suffix)
+                print_rms(raw_all_data, run_dir, suffix)
 
     outfile.Close()
+
+if __name__ == "__main__":
+
+    if len(sys.argv) > 1:
+        fname = sys.argv[1]
+        print '# Input files are', fname
+    else:
+        print "No input files given!"
+        exit(0)
+
+    runPlotNoise(fname)
