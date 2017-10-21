@@ -3,8 +3,21 @@
 import glob, sys, os, array, math
 import numpy as np
 import ROOT as rt
+from scipy.stats import norm
+from scipy import signal
 
 #rt.TGaxis.SetMaxDigits(3)
+
+def getPedSigma(values):
+
+    hist = rt.TH1F("h","h",100,50,350)
+
+    for val in values: hist.Fill(val)
+
+    gaus = rt.TF1("gaus")
+    hist.Fit(gaus)
+
+    print gaus.GetParameter(0), gaus.GetParameter(1)
 
 def getSensorMap():
 
@@ -52,7 +65,7 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
         if ientry % 100 == 0: print("Event: %i" % ientry)
 
         # filter sca by time sample (before trigger)
-        if tree.timesamp[sca] > 9: continue
+        if tree.timesamp[sca] > 8: continue
 
         ## filter TOA mishits
         #n_toa = sum([1 for toa in tree.toa_rise if toa > 0])
@@ -144,6 +157,13 @@ def subtractPedestal(chans_data):
             #chan_ped = values.mean()
             chan_ped = np.median(values)
             chan_ped_std = values.std()
+            #a, chan_ped_std = norm.fit(values)
+            #print chan_ped_std, values.std()
+            #peakind = signal.find_peaks_cwt(values, np.arange(1,50))
+            #print peakind
+            #getPedSigma(values)
+
+            #exit(0)
 
             #if "hg" in var: print chan, chan_ped, chan_ped_std
 
@@ -368,7 +388,7 @@ def calcCorr(all_chan_data, cname = "corr_plot.pdf"):
 
     #q = raw_input("continue?")
 
-    canv.SaveAs(cname+".pdf")
+    canv.SaveAs(cname+".png")
     return canv
 
 def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.txt"):
@@ -396,7 +416,10 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
             chan_data = all_chan_data[chan][var]
 
-            chan_ped = chan_data.mean()
+            if "to" in var:
+                chan_ped = sum(chan_data > 4)
+            else:
+                chan_ped = chan_data.mean()
             chan_rms = chan_data.std()
             #print chan_data
 
@@ -442,7 +465,12 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
 
         # Plot values in Hexagon
         hHex_ped = rt.SingleLayerPlot()
-        hHex_ped.SetName("ped_"+var); hHex_ped.SetTitle("Mean (ADC) for " + var + suffix.replace('_',' '))
+        hHex_ped.SetName("ped_"+var);
+        if "to" in var:
+            hHex_ped.SetTitle("Count hits for " + var + suffix.replace('_',' '))
+        else:
+            hHex_ped.SetTitle("Mean (ADC) for " + var + suffix.replace('_',' '))
+
         hHex_rms = rt.SingleLayerPlot()
         hHex_rms.SetName("rms_"+var); hHex_rms.SetTitle("Ped RMS (ADC) for " + var + suffix.replace('_',' '))
 
@@ -506,7 +534,7 @@ def runPlotNoise(fname):
     #for sca in [0]:#range(13):
     #for sca in range(13):
     scas = range(13)#[0]
-    scas = [0]
+    scas = [1]
     for sca in scas:
         for chip in chips:
             print(80*"#")
@@ -515,23 +543,24 @@ def runPlotNoise(fname):
             raw_all_data = readTree(fname, chip, sca, nchans, chan_select)
             all_data = subtractPedestal(raw_all_data)
 
-            cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-            makePedPlot(raw_all_data,cname)
-            cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-            makePedPlot(all_data,cname)
+            if True:
+                cname = run_dir + "ped_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+                makePedPlot(raw_all_data,cname)
+                cname = run_dir + "rms_zoom_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+                makePedPlot(all_data,cname)
 
-            #continue
+                #continue
 
-            cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-            canv = calcCorr(raw_all_data, cname)
-            outfile.cd()
-            canv.Write()
+                cname = run_dir + "corr_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+                canv = calcCorr(raw_all_data, cname)
+                outfile.cd()
+                canv.Write()
 
-            cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
-            noise_data = calcNoise(all_data)
-            canv = plotNoise(noise_data, cname)
-            outfile.cd()
-            canv.Write()
+                cname = run_dir + "noise_chip_%s_sca_%i_chans_%s" %(str(chip),sca,chan_select)
+                noise_data = calcNoise(all_data)
+                canv = plotNoise(noise_data, cname)
+                outfile.cd()
+                canv.Write()
 
             if chip == "all":
                 #foutname = run_dir + "avg_rms_summary.txt"
