@@ -10,14 +10,24 @@ from scipy import signal
 
 def getPedSigma(values):
 
-    hist = rt.TH1F("h","h",100,50,350)
+    if min(values) > 0:
+        hist = rt.TH1F("h","h",100,50,350)
+    else:
+        hist = rt.TH1F("h","h",100,50,350)
+        #hist = rt.TH1F("h","h",100,-150,150)
 
     for val in values: hist.Fill(val)
 
-    gaus = rt.TF1("gaus")
-    hist.Fit(gaus)
+    hist.Fit("gaus","q")
+    gaus = hist.GetFunction("gaus")
 
-    print gaus.GetParameter(0), gaus.GetParameter(1)
+    if gaus:
+        #print gaus.GetParameter(0), gaus.GetParameter(1), gaus.GetParameter(2)
+        return gaus.GetParameter(2)
+    else:
+        return np.std(values)
+        #return gaus.GetParameter(2)
+
 
 def getSensorMap():
 
@@ -80,6 +90,7 @@ def getChansData(tree, chip = 0, chans = [0], sca = 0, variabs = []):
 
             if chip == "all":
                 for chan in chans:#[:len(chans)/4]:#range(64):
+                    #chip_nb = chan/64 + 16
                     chip_nb = chan/64
                     if ("tot" in var) or ("toa" in var):
                         val = getattr(tree,var)[chip_nb*64 + (chan)%64 ]
@@ -157,11 +168,6 @@ def subtractPedestal(chans_data):
             #chan_ped = values.mean()
             chan_ped = np.median(values)
             chan_ped_std = values.std()
-            #a, chan_ped_std = norm.fit(values)
-            #print chan_ped_std, values.std()
-            #peakind = signal.find_peaks_cwt(values, np.arange(1,50))
-            #print peakind
-            #getPedSigma(values)
 
             #exit(0)
 
@@ -207,6 +213,7 @@ def makePedPlot(all_chan_data, cname = "ped_plot.pdf"):
             #chan_ped = chan_data.mean()
             chan_ped = np.median(chan_data)
             chan_rms = chan_data.std()
+            #chan_rms = getPedSigma(chan_data)
 
             #print var,chan,chan_ped,chan_rms
             if chan_ped < 10: # means we are analyzing ped subtracted data
@@ -259,6 +266,8 @@ def calcNoise(all_chan_data):
             n_valid_chans = 0
 
             for i,chan in enumerate(chans):
+
+                #if chan == 22: continue
 
                 val = all_chan_data[chan][var][event]
 
@@ -323,7 +332,13 @@ def plotNoise(noise_data, cname):
             nbins = int((xmax-xmin))/2
             #nbins = min(100,len(values)/50)
 
-            hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
+            #hist = rt.TH1F("h_" + key, key , nbins, xmin, xmax)
+            #hist = rt.TH1F("h_" + key, key , 100, xmin, xmax)
+            if "lg" in var:
+                hist = rt.TH1F("h_" + key, key , 100, -2000, 2000)
+            else:
+                hist = rt.TH1F("h_" + key, key , 100, -10000, 10000)
+
             for val in values: hist.Fill(val)
             #hist.Draw()
             hists.append(hist)
@@ -422,6 +437,7 @@ def print_rms(all_chan_data, outdir = "./", suffix = ""):#foutname = "rms_avg.tx
                 chan_ped = chan_data.mean()
             chan_rms = chan_data.std()
             #print chan_data
+            #chan_rms = getPedSigma(chan_data)
 
             chip = chan/64
             real_chan = chan/4
@@ -516,6 +532,7 @@ def runPlotNoise(fname):
     #fnames = glob.glob(fname)
     run_name = fname.replace('.root','')
     #run_dir = run_name + '_plots_nopedsub/'
+    #run_dir = run_name + '_plotsFit/'
     run_dir = run_name + '_plots/'
     if not os.path.exists(run_dir): os.makedirs(run_dir)
     print("Output dir: " + run_dir)
